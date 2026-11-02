@@ -946,7 +946,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <h3>5. Lưu ý</h3>
         <ul>
           <li>Tab <b>Đơn hàng</b> và <b>Dashboard</b> mặc định hiện tháng này, sang tháng mới tự chuyển. Bấm <b>Tháng trước</b> hoặc <b>Tùy chỉnh</b> (chọn Từ ngày – Đến ngày, tối đa 366 ngày) để xem đơn các kỳ trước, kể cả đơn chưa đi.</li>
-          <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận, SĐT, địa chỉ (cả hai chưa ship) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền, các đơn còn lại giữ dòng, tiền về 0 và ghi chú "Ghép với đơn trên". Hoa hồng tự tính lại.</li>
+          <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận, SĐT, địa chỉ (cả hai chưa ship) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền và CỘNG DỒN sản phẩm của các đơn (cùng sản phẩm thì cộng số lượng). Các đơn còn lại giữ dòng nhưng tiền về 0, không còn sản phẩm (sản phẩm đã chuyển lên đơn trên, ghi trong ghi chú "Ghép với đơn trên") và không đổ sang bảng xuất hàng. Hoa hồng tự tính lại.</li>
           <li>Tick <b>Giữ đăng nhập 7 ngày</b> khi đăng nhập: mỗi lần mở app sẽ vào thẳng, không phải nhập lại. Dùng máy của người khác thì bỏ tick và bấm <b>Đăng xuất</b> khi xong.</li>
           <li>Quên mật khẩu: liên hệ Admin để được cấp lại.</li>
         </ul>
@@ -1044,7 +1044,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <div class="field"><label for="mAmount">Số tiền thu sau gộp (K)</label><input type="number" id="mAmount" min="0" step="any"></div>
         <div class="field"><label for="mShip">Phí ship (L) của đơn trên</label><select id="mShip"></select></div>
       </div>
-      <div class="hint">Đơn trên (cũ nhất) nhận tiền thu và ghi chú đã gộp. Các đơn còn lại giữ nguyên dòng và sản phẩm, tiền thu về 0, ghi chú "Ghép với đơn trên". Hoa hồng tự tính lại.</div>
+      <div class="hint">Đơn trên (cũ nhất) nhận tiền thu, cộng dồn sản phẩm và ghi chú đã gộp. Các đơn còn lại giữ dòng nhưng tiền thu về 0, sản phẩm chuyển lên đơn trên, ghi chú "Ghép với đơn trên". Hoa hồng tự tính lại.</div>
     </div>
     <div class="dlg-foot">
       <button class="btn ghost" type="button" id="mCancel">Hủy</button>
@@ -3025,7 +3025,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   function mnorm(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, ''); }
   function mergeOk(o) {
     if (o.shipped || o.preparing || o.state === 'returned' || o.bu) return false;
-    if (String(o.note || '').indexOf(MERGE_TAG) >= 0) return false;
+    if (String(o.note || '').indexOf(MERGE_TAG) >= 0 && !String(o.product || '').trim()) return false;
     return !!(String(o.receiver || '').trim() && String(o.phone || '').trim());
   }
   function mergeKeyOf(o) {
@@ -3045,6 +3045,19 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     document.querySelectorAll('#orderList [data-mgsel]').forEach(c => { c.checked = false; });
     updateMergeBar();
   });
+  function mergedProducts(list) {
+    const order = [], qty = {}, extra = [];
+    list.forEach(o => String(o.product || '').split('\n').forEach(line => {
+      const t = line.trim();
+      if (!t) return;
+      const m = t.match(/^(\d+)\s*(?:x\s+)?(.+)$/i);
+      if (!m) { if (extra.indexOf(t) < 0) extra.push(t); return; }
+      const name = m[2].trim();
+      if (!(name in qty)) { qty[name] = 0; order.push(name); }
+      qty[name] += Number(m[1]);
+    }));
+    return order.map(n => qty[n] + ' ' + n).concat(extra).join(', ');
+  }
   function mergeBox(title, o) {
     return `<div class="mg-box"><div class="mg-t">${title}</div>
       <div>${esc(o.ts)} · thu <b>${k(o.amount)}</b> · ${esc(o.ship || 'chưa chọn phí ship')}</div>
@@ -3060,7 +3073,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const first = list[0];
     $('mTitle').textContent = 'Gộp ' + list.length + ' đơn của cùng khách';
     $('mSub').innerHTML = esc(first.receiver) + ' · ' + esc(first.phone) + '<br>' + esc(first.address) + (first.src === 'le' ? '' : '<br>' + esc(first.code) + ' ' + esc(first.name));
-    $('mInfo').innerHTML = list.map((o, n) => mergeBox(n === 0 ? 'ĐƠN TRÊN (cũ nhất, nhận tiền)' : 'ĐƠN GỘP VÀO (tiền về 0)', o)).join('');
+    $('mInfo').innerHTML = list.map((o, n) => mergeBox(n === 0 ? 'ĐƠN TRÊN (cũ nhất, nhận tiền)' : 'ĐƠN GỘP VÀO (tiền về 0, sản phẩm chuyển lên đơn trên)', o)).join('') +
+      `<div class="mg-box"><div class="mg-t">SAU KHI GỘP, ĐƠN TRÊN CÓ</div><div class="mg-p">${esc(mergedProducts(list))}</div></div>`;
     $('mAmount').value = list.reduce((t, o) => t + (num(o.amount) || 0), 0);
     $('mShip').innerHTML = S.meta.ships.map(x => `<option value="${esc(x)}"${x === first.ship ? ' selected' : ''}>${esc(x)}</option>`).join('');
     $('mergeDlg').showModal();
