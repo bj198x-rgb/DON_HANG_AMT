@@ -749,6 +749,18 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
 
     <section id="tab-orders" hidden>
       <h2 class="page-title">Đơn hàng</h2>
+      <div class="period" id="oPeriodBar" hidden>
+        <div class="seg" id="oSeg">
+          <button type="button" data-oper="this" class="on">Tháng này</button>
+          <button type="button" data-oper="last">Tháng trước</button>
+          <button type="button" data-oper="custom">Tùy chỉnh</button>
+        </div>
+        <div class="period-custom" id="oCustom" hidden>
+          <label>Từ ngày<input type="date" id="oFrom"></label>
+          <label>Đến ngày<input type="date" id="oTo"></label>
+          <button type="button" class="btn" id="btnOPeriod">Xem</button>
+        </div>
+      </div>
       <div class="filters">
         <input type="month" id="oMonth" aria-label="Tháng">
         <select id="oSrc" aria-label="Nguồn đơn" hidden>
@@ -916,7 +928,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       <div class="panel">
         <h3>5. Lưu ý</h3>
         <ul>
-          <li>Danh sách đơn và Dashboard chỉ hiện tháng hiện tại, sang tháng mới tự chuyển.</li>
+          <li>Tab <b>Đơn hàng</b> và <b>Dashboard</b> mặc định hiện tháng này, sang tháng mới tự chuyển. Bấm <b>Tháng trước</b> hoặc <b>Tùy chỉnh</b> (chọn Từ ngày – Đến ngày, tối đa 366 ngày) để xem đơn các kỳ trước, kể cả đơn chưa đi.</li>
           <li>Tick <b>Giữ đăng nhập 7 ngày</b> khi đăng nhập: mỗi lần mở app sẽ vào thẳng, không phải nhập lại. Dùng máy của người khác thì bỏ tick và bấm <b>Đăng xuất</b> khi xong.</li>
           <li>Quên mật khẩu: liên hệ Admin để được cấp lại.</li>
         </ul>
@@ -1190,6 +1202,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('fCtv').innerHTML = options(ctvOpts, 'Chọn CTV/Đại lý');
     $('oCtv').innerHTML = options(ctvOpts, 'Tất cả CTV/Đại lý');
     $('oMonth').value = m.currentMonth; $('oMonth').hidden = !isAdmin();
+    $('oPeriodBar').hidden = isAdmin(); S.oPeriod = 'this'; setOPeriod('this', true);
     ctvPickShow('dCtv', isAdmin());
     $('dCtv').innerHTML = options(ctvOpts, 'Tất cả CTV/Đại lý');
     const leOpt = [{ value: m.retailOwner || 'KHACHLE', label: 'Khách lẻ' }];
@@ -2771,6 +2784,33 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     finally { busy(btn, false); }
   });
 
+  function oPrevMonth() {
+    const cm = S.meta.currentMonth.split('-').map(Number);
+    const d = new Date(cm[0], cm[1] - 2, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  function oPeriodFilter() {
+    const mode = S.oPeriod || 'this';
+    if (mode === 'last') { const m = oPrevMonth(); return { month: m, label: monthLabel(m) + ': ' }; }
+    if (mode === 'custom') {
+      const f = $('oFrom').value, t = $('oTo').value;
+      if (!f || !t) return null;
+      return { from: f, to: t, label: 'Từ ' + dmy(f) + ' đến ' + dmy(t) + ': ' };
+    }
+    return { month: S.meta.currentMonth, label: monthLabel(S.meta.currentMonth) + ': ' };
+  }
+  function setOPeriod(mode, silent) {
+    S.oPeriod = mode;
+    document.querySelectorAll('#oSeg button').forEach(b => b.classList.toggle('on', b.dataset.oper === mode));
+    $('oCustom').hidden = mode !== 'custom';
+    if (mode === 'custom' && !$('oFrom').value) {
+      const cm = S.meta.currentMonth.split('-').map(Number);
+      $('oFrom').value = isoOf(new Date(cm[0], cm[1] - 1, 1)); $('oTo').value = todayIso();
+    }
+    if (!silent && mode !== 'custom') loadOrders();
+  }
+  $('oSeg').addEventListener('click', e => { const b = e.target.closest('[data-oper]'); if (b) setOPeriod(b.dataset.oper); });
+  $('btnOPeriod').addEventListener('click', loadOrders);
   $('btnSearch').addEventListener('click', loadOrders);
   $('oSrc').addEventListener('change', () => { ctvPickShow('oCtv', isAdmin() && $('oSrc').value !== 'le'); loadOrders(); });
   $('oCtv').addEventListener('change', loadOrders);
@@ -2781,10 +2821,17 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('orderList').innerHTML = '<p class="empty">Đang tải đơn hàng…</p>';
     try {
       const src = isAdmin() ? $('oSrc').value : 'ctv';
-      S.orders = await api('listOrders', S.token, {
+      const flt = {
         month: $('oMonth').value, code: isAdmin() && src !== 'le' ? $('oCtv').value : '', shipped: $('oShipped').value, q: $('oQ').value,
         src: src
-      });
+      };
+      if (!isAdmin()) {
+        const pr = oPeriodFilter();
+        if (!pr) { $('orderList').innerHTML = ''; S.loaded.orders = false; return toast('Chọn đủ Từ ngày và Đến ngày.', true); }
+        flt.month = pr.month || ''; flt.from = pr.from || ''; flt.to = pr.to || '';
+        S.oLabel = pr.label;
+      }
+      S.orders = await api('listOrders', S.token, flt);
       S.ordersSrc = src;
       renderOrders();
     } catch (err) { fail(err); $('orderList').innerHTML = ''; S.loaded.orders = false; }
@@ -2799,12 +2846,12 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   function renderOrders() {
     const list = S.orders, admin = isAdmin();
     const prefix = (admin && arcHit($('oMonth').value ? $('oMonth').value + '-01' : '0000-01-01') ? '⚠ Đơn đến hết ' + monthLabel(S.meta.archivedUpto).toLowerCase() + ' đã lưu trữ (xem trong file AMT_LuuTru_DonHang). ' : '') +
-      (admin ? (S.ordersSrc === 'le' ? 'Đơn khách lẻ: ' : '') : monthLabel(S.meta.currentMonth) + ': ');
+      (admin ? (S.ordersSrc === 'le' ? 'Đơn khách lẻ: ' : '') : (S.oLabel || (monthLabel(S.meta.currentMonth) + ': ')));
     $('orderCount').textContent = prefix + list.length + ' đơn' + (list.length >= 300 ? ' (hiển thị tối đa 300 đơn mới nhất)' : '');
     if (!list.length) {
       $('orderList').innerHTML = admin
         ? '<p class="empty">Không có đơn nào khớp bộ lọc. Đổi tháng hoặc xóa từ khóa tìm kiếm.</p>'
-        : '<p class="empty">Tháng này bạn chưa có đơn nào khớp bộ lọc. Nhập đơn mới ở tab Nhập đơn.</p>';
+        : '<p class="empty">Không có đơn nào trong kỳ đã chọn khớp bộ lọc. Đổi kỳ xem (Tháng này / Tháng trước / Tùy chỉnh) hoặc xóa từ khóa tìm kiếm.</p>';
       return;
     }
     $('orderList').innerHTML = list.map((o, i) => {
