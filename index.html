@@ -522,6 +522,18 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .guide li { margin-bottom: 8px; }
 
   dialog { border: 0; border-radius: 12px; padding: 0; width: min(560px, 94vw); }
+  .mg-box { border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; background: var(--mist); }
+  .mg-box .mg-t { font-weight: 800; color: var(--green-dark); margin-bottom: 4px; }
+  .mg-box div { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.45; }
+  .mg-box .mg-p { white-space: pre-line; font-weight: 700; }
+  .mg-chk { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--green-dark); cursor: pointer; }
+  .mg-chk input { width: 20px; height: 20px; accent-color: var(--green); }
+  .mg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; position: sticky; bottom: 88px; z-index: 6; background: #fff;
+            border: 2px solid var(--green); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; box-shadow: 0 4px 14px rgba(29,42,23,.15); }
+  .mg-bar[hidden] { display: none; }
+  .mg-bar b { flex: 1 1 100%; color: var(--green-dark); }
+  .mg-bar .btn { width: auto; padding: 10px 14px; flex: 1 1 auto; }
+  @media (min-width: 641px) { .mg-bar { bottom: 12px; } .mg-bar b { flex: 1 1 auto; } }
   dialog::backdrop { background: rgba(29,42,23,.55); }
   .dlg-body { padding: 20px; max-height: 75vh; overflow-y: auto; }
   .dlg-body h2 { margin: 0 0 4px; font-size: 21px; font-weight: 800; color: var(--green-dark); }
@@ -781,6 +793,11 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <button class="btn" id="btnSearch" type="button">Lọc đơn</button>
       </div>
       <p class="count" id="orderCount"></p>
+      <div class="mg-bar" id="mergeBar" hidden>
+        <b id="mgCount"></b>
+        <button type="button" class="btn" id="btnMergeGo">🔗 Gộp các đơn đã chọn</button>
+        <button type="button" class="btn ghost" id="btnMergeClear">Bỏ chọn</button>
+      </div>
       <div class="list" id="orderList"></div>
     </section>
 
@@ -929,6 +946,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <h3>5. Lưu ý</h3>
         <ul>
           <li>Tab <b>Đơn hàng</b> và <b>Dashboard</b> mặc định hiện tháng này, sang tháng mới tự chuyển. Bấm <b>Tháng trước</b> hoặc <b>Tùy chỉnh</b> (chọn Từ ngày – Đến ngày, tối đa 366 ngày) để xem đơn các kỳ trước, kể cả đơn chưa đi.</li>
+          <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận, SĐT, địa chỉ (cả hai chưa ship) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền, các đơn còn lại giữ dòng, tiền về 0 và ghi chú "Ghép với đơn trên". Hoa hồng tự tính lại.</li>
           <li>Tick <b>Giữ đăng nhập 7 ngày</b> khi đăng nhập: mỗi lần mở app sẽ vào thẳng, không phải nhập lại. Dùng máy của người khác thì bỏ tick và bấm <b>Đăng xuất</b> khi xong.</li>
           <li>Quên mật khẩu: liên hệ Admin để được cấp lại.</li>
         </ul>
@@ -1012,6 +1030,25 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     <div class="dlg-foot">
       <button class="btn ghost" type="button" id="btnCancel">Hủy</button>
       <button class="btn" type="button" id="btnSave">Lưu thay đổi</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="mergeDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2 id="mTitle">Gộp đơn của cùng khách</h2>
+      <p class="count" id="mSub"></p>
+      <div id="mInfo"></div>
+      <div class="row2">
+        <div class="field"><label for="mAmount">Số tiền thu sau gộp (K)</label><input type="number" id="mAmount" min="0" step="any"></div>
+        <div class="field"><label for="mShip">Phí ship (L) của đơn trên</label><select id="mShip"></select></div>
+      </div>
+      <div class="hint">Đơn trên (cũ nhất) nhận tiền thu và ghi chú đã gộp. Các đơn còn lại giữ nguyên dòng và sản phẩm, tiền thu về 0, ghi chú "Ghép với đơn trên". Hoa hồng tự tính lại.</div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" type="button" id="mCancel">Hủy</button>
+      <button class="btn" type="button" id="mOk">Xác nhận gộp</button>
     </div>
   </form>
 </dialog>
@@ -2849,11 +2886,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       (admin ? (S.ordersSrc === 'le' ? 'Đơn khách lẻ: ' : '') : (S.oLabel || (monthLabel(S.meta.currentMonth) + ': ')));
     $('orderCount').textContent = prefix + list.length + ' đơn' + (list.length >= 300 ? ' (hiển thị tối đa 300 đơn mới nhất)' : '');
     if (!list.length) {
+      S.mgSel = {}; updateMergeBar();
       $('orderList').innerHTML = admin
         ? '<p class="empty">Không có đơn nào khớp bộ lọc. Đổi tháng hoặc xóa từ khóa tìm kiếm.</p>'
         : '<p class="empty">Không có đơn nào trong kỳ đã chọn khớp bộ lọc. Đổi kỳ xem (Tháng này / Tháng trước / Tùy chỉnh) hoặc xóa từ khóa tìm kiếm.</p>';
       return;
     }
+    S.mgSel = {};
+    updateMergeBar();
     $('orderList').innerHTML = list.map((o, i) => {
       const rt = o.state === 'returned', le = o.src === 'le';
       let editPart = '';
@@ -2890,6 +2930,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           ${editLogHtml(o.editLog)}
           <div class="o-actions">
             ${String(o.bill).indexOf('https:') === 0 ? `<a href="${esc(o.bill)}" target="_blank" rel="noopener">Xem bill</a>` : ''}
+            ${mergeOk(o) ? `<label class="mg-chk"><input type="checkbox" data-mgsel="${i}"${S.mgSel[i] ? ' checked' : ''}> Chọn để gộp</label>` : ''}
             <button type="button" class="link" data-print="${i}">In phiếu</button>
             ${!le || admin ? `<button type="button" class="link" data-dup="${i}">📋 Sao chép đơn</button>` : ''}
             ${editPart}
@@ -2968,6 +3009,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       toast(copyText(o.tracking) ? 'Đã chép mã ' + o.tracking + '. Dán vào ô tra cứu của hãng.' : 'Không chép tự động được. Bấm giữ vào mã để chép.', false);
       return;
     }
+    const ms = e.target.closest('[data-mgsel]');
+    if (ms) { S.mgSel[Number(ms.dataset.mgsel)] = ms.checked; updateMergeBar(); return; }
     const dp = e.target.closest('[data-dup]');
     if (dp) { copyOrder(S.orders[Number(dp.dataset.dup)]); return; }
     const dl = e.target.closest('[data-del]');
@@ -2976,6 +3019,70 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (p) printOrder(S.orders[Number(p.dataset.print)]);
     if (st) openStatus(Number(st.dataset.status));
     if (fm) enterEdit(S.orders[Number(fm.dataset.form)]);
+  });
+
+  const MERGE_TAG = 'Ghép với đơn trên';
+  function mnorm(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, ''); }
+  function mergeOk(o) {
+    if (o.shipped || o.preparing || o.state === 'returned' || o.bu) return false;
+    if (String(o.note || '').indexOf(MERGE_TAG) >= 0) return false;
+    return !!(String(o.receiver || '').trim() && String(o.phone || '').trim());
+  }
+  function mergeKeyOf(o) {
+    return [mnorm(o.code), String(o.tsKey || '').slice(3, 10), mnorm(o.receiver), mnorm(o.phone), mnorm(o.address)].join('|');
+  }
+  function mergePicked() {
+    return Object.keys(S.mgSel || {}).filter(i => S.mgSel[i]).map(Number).sort((a, b) => S.orders[a].row - S.orders[b].row);
+  }
+  function updateMergeBar() {
+    const n = mergePicked().length;
+    $('mergeBar').hidden = n === 0;
+    $('mgCount').textContent = n === 1 ? 'Đã chọn 1 đơn. Chọn thêm đơn của cùng khách để gộp.' : 'Đã chọn ' + n + ' đơn';
+    $('btnMergeGo').disabled = n < 2;
+  }
+  $('btnMergeClear').addEventListener('click', () => {
+    S.mgSel = {};
+    document.querySelectorAll('#orderList [data-mgsel]').forEach(c => { c.checked = false; });
+    updateMergeBar();
+  });
+  function mergeBox(title, o) {
+    return `<div class="mg-box"><div class="mg-t">${title}</div>
+      <div>${esc(o.ts)} · thu <b>${k(o.amount)}</b> · ${esc(o.ship || 'chưa chọn phí ship')}</div>
+      <div class="mg-p">${esc(o.product)}</div></div>`;
+  }
+  $('btnMergeGo').addEventListener('click', () => {
+    const idx = mergePicked();
+    if (idx.length < 2) return toast('Tick ít nhất 2 đơn để gộp.', true);
+    const list = idx.map(i => S.orders[i]);
+    const key = mergeKeyOf(list[0]);
+    if (list.some(o => mergeKeyOf(o) !== key)) return toast('Chỉ gộp được các đơn cùng người nhận, SĐT, địa chỉ, cùng tháng. Bỏ tick đơn không cùng khách.', true);
+    S.merge = list;
+    const first = list[0];
+    $('mTitle').textContent = 'Gộp ' + list.length + ' đơn của cùng khách';
+    $('mSub').innerHTML = esc(first.receiver) + ' · ' + esc(first.phone) + '<br>' + esc(first.address) + (first.src === 'le' ? '' : '<br>' + esc(first.code) + ' ' + esc(first.name));
+    $('mInfo').innerHTML = list.map((o, n) => mergeBox(n === 0 ? 'ĐƠN TRÊN (cũ nhất, nhận tiền)' : 'ĐƠN GỘP VÀO (tiền về 0)', o)).join('');
+    $('mAmount').value = list.reduce((t, o) => t + (num(o.amount) || 0), 0);
+    $('mShip').innerHTML = S.meta.ships.map(x => `<option value="${esc(x)}"${x === first.ship ? ' selected' : ''}>${esc(x)}</option>`).join('');
+    $('mergeDlg').showModal();
+  });
+  $('mCancel').addEventListener('click', () => $('mergeDlg').close());
+  $('mOk').addEventListener('click', async () => {
+    const list = S.merge;
+    if (!list || list.length < 2) return;
+    const amt = $('mAmount').value;
+    if (amt === '' || Number(amt) < 0) return toast('Nhập số tiền thu sau gộp (không âm).', true);
+    const expect = {};
+    list.forEach(o => { expect[o.row] = o.tsKey; });
+    const btn = $('mOk');
+    busy(btn, true, 'Đang gộp…');
+    try {
+      await api('mergeOrders', S.token, list[0].src || 'ctv', list.map(o => o.row), { expect: expect, amount: amt, ship: $('mShip').value });
+      $('mergeDlg').close();
+      toast('Đã gộp ' + list.length + ' đơn của ' + list[0].receiver + '. Tổng thu ' + k(amt) + '.');
+      S.loaded.dash = false; S.loaded.cust = false;
+      loadOrders();
+    } catch (err) { fail(err); }
+    finally { busy(btn, false); }
   });
 
   async function deleteOrderUi(o, btn) {
