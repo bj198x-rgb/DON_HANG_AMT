@@ -528,6 +528,11 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .mg-box .mg-p { white-space: pre-line; font-weight: 700; }
   .mg-chk { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--green-dark); cursor: pointer; }
   .mg-chk input { width: 20px; height: 20px; accent-color: var(--green); }
+  .imp-warn { color: #B3261E; font-weight: 700; }
+  .imp-box { margin: 0 0 10px; }
+  #impRes .mg-box div { font-size: 14px; }
+  #impRes .mg-box .imp-line { padding: 6px 0; border-top: 1px dashed var(--line); }
+  #impRes .mg-box .imp-line:first-of-type { border-top: 0; }
   .mg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; position: sticky; bottom: 88px; z-index: 6; background: #fff;
             border: 2px solid var(--green); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; box-shadow: 0 4px 14px rgba(29,42,23,.15); }
   .mg-bar[hidden] { display: none; }
@@ -793,6 +798,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <button class="btn" id="btnSearch" type="button">Lọc đơn</button>
       </div>
       <p class="count" id="orderCount"></p>
+      <div class="imp-box" id="impBox" hidden>
+        <button type="button" class="btn ghost" id="btnImport">📥 Nhập file vận đơn (Excel / CSV)</button>
+        <span id="impLibUrl" data-u="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" hidden></span>
+      </div>
       <div class="mg-bar" id="mergeBar" hidden>
         <b id="mgCount"></b>
         <button type="button" class="btn" id="btnMergeGo">🔗 Gộp các đơn đã chọn</button>
@@ -946,6 +955,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <h3>5. Lưu ý</h3>
         <ul>
           <li>Tab <b>Đơn hàng</b> và <b>Dashboard</b> mặc định hiện tháng này, sang tháng mới tự chuyển. Bấm <b>Tháng trước</b> hoặc <b>Tùy chỉnh</b> (chọn Từ ngày – Đến ngày, tối đa 366 ngày) để xem đơn các kỳ trước, kể cả đơn chưa đi.</li>
+          <li><b>Nhập file vận đơn</b> (Admin): ở tab <b>Đơn hàng</b> bấm <b>Nhập file vận đơn</b>, chọn file Excel hoặc CSV của hãng vận chuyển, kiểm tra các cột app nhận diện (SĐT, tên, mã vận đơn, cước), bấm <b>Xem trước</b> rồi <b>Ghi vào đơn</b>. App khớp theo SĐT + tên người nhận, ghi mã vận đơn (nhiều mã thì mỗi mã 1 dòng), cộng cước vào cột Cước vận chuyển, tick Đã ship + ngày hôm nay. Đơn đã có mã vận đơn, khớp nhiều đơn hoặc không tìm thấy sẽ được liệt kê để bạn nhập tay.</li>
           <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận, SĐT, địa chỉ (cả hai chưa ship) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền và CỘNG DỒN sản phẩm của các đơn (cùng sản phẩm thì cộng số lượng). Các đơn còn lại giữ dòng nhưng tiền về 0, không còn sản phẩm (sản phẩm đã chuyển lên đơn trên, ghi trong ghi chú "Ghép với đơn trên") và không đổ sang bảng xuất hàng. Hoa hồng tự tính lại.</li>
           <li>Tick <b>Giữ đăng nhập 7 ngày</b> khi đăng nhập: mỗi lần mở app sẽ vào thẳng, không phải nhập lại. Dùng máy của người khác thì bỏ tick và bấm <b>Đăng xuất</b> khi xong.</li>
           <li>Quên mật khẩu: liên hệ Admin để được cấp lại.</li>
@@ -1049,6 +1059,42 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     <div class="dlg-foot">
       <button class="btn ghost" type="button" id="mCancel">Hủy</button>
       <button class="btn" type="button" id="mOk">Xác nhận gộp</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="impDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2>Nhập file vận đơn</h2>
+      <p class="count">Chọn file Excel (.xlsx) hoặc CSV tải từ hãng vận chuyển. App tự nhận diện cột của VNPost và Viettel, điền mã vận đơn và cước vận chuyển (cột Z) vào đơn khớp SĐT + tên người nhận (file không có SĐT thì khớp theo Mã đơn hàng + tên người nhận). Đơn đã có mã vận đơn thì bỏ qua và báo lại.</p>
+      <div class="field"><label for="impFile">File</label><input type="file" id="impFile" accept=".xlsx,.xls,.csv,.txt,text/csv"></div>
+      <div id="impMap" hidden>
+        <div class="row2">
+          <div class="field"><label for="iName">Cột Tên người nhận</label><select id="iName"></select></div>
+          <div class="field"><label for="iPhone">Cột SĐT</label><select id="iPhone"></select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="iTrack">Cột Mã vận đơn</label><select id="iTrack"></select></div>
+          <div class="field"><label for="iFee">Cột Cước / Phí ship</label><select id="iFee"></select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="iCode">Cột Mã đơn hàng (chỉ để khớp, không ghi vào đơn)</label><select id="iCode"></select></div>
+          <div class="field"><label for="iAddr">Cột Địa chỉ nhận (chỉ để phân biệt khi trùng tên)</label><select id="iAddr"></select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="iUnit">Đơn vị tiền ở cột cước</label><select id="iUnit"><option value="dong">Đồng (22.000 = 22k)</option><option value="k">Nghìn đồng (22 = 22k)</option></select></div>
+          <div class="field"><label for="iCarrier">Ghi Đơn vị VC</label><select id="iCarrier"></select></div>
+        </div>
+        <label class="mg-chk"><input type="checkbox" id="iShip" checked> Tick Đã ship và ghi ngày hôm nay nếu đơn chưa ship</label>
+        <div class="hint" id="impSample"></div>
+      </div>
+      <div id="impRes"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" type="button" id="impClose">Đóng</button>
+      <button class="btn" type="button" id="impPrev" disabled>Xem trước</button>
+      <button class="btn" type="button" id="impGo" disabled hidden>Ghi vào đơn</button>
     </div>
   </form>
 </dialog>
@@ -1254,6 +1300,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('tabSettleLabel').textContent = isAdmin() ? 'Chốt HH' : 'Hoa hồng';
     $('sCtvWrap').hidden = !isAdmin();
     $('btnSummary').hidden = !isAdmin();
+    $('impBox').hidden = !isAdmin();
     $('arcPanel').hidden = !isAdmin();
     $('arcResult').innerHTML = '';
     if (isAdmin()) {
@@ -2968,11 +3015,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     return S.meta.carriers.find(c => normName(c.name) === n) ||
            S.meta.carriers.find(c => { const m = normName(c.name); return m && (n.indexOf(m) >= 0 || m.indexOf(n) >= 0); }) || null;
   }
+  function firstCode(o) { return String(o.tracking || '').split(/\r?\n/)[0].trim(); }
   function trackHtml(o, i) {
     const c = carrierOf(o);
+    const codes = String(o.tracking || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
     let action = '';
     if (c && c.url && c.url.indexOf('{ma}') >= 0) {
-      action = `<a class="trk-btn" href="${esc(c.url.split('{ma}').join(encodeURIComponent(o.tracking)))}" target="_blank" rel="noopener">Tra cứu hành trình ↗</a>`;
+      action = codes.map((cd, n) => `<a class="trk-btn" href="${esc(c.url.split('{ma}').join(encodeURIComponent(cd)))}" target="_blank" rel="noopener">Tra cứu${codes.length > 1 ? ' mã ' + (n + 1) : ' hành trình'} ↗</a>`).join('');
     } else if (c && c.url) {
       action = `<button type="button" class="link" data-copy="${i}">Chép mã</button>` +
                `<a class="trk-btn" href="${esc(c.url)}" target="_blank" rel="noopener" data-copylink="${i}">Tra cứu hành trình ↗</a>`;
@@ -2983,7 +3032,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (!o.carrier && !c) why = 'Chưa ghi Đơn vị VC (cột W) và DM_VanChuyen chưa có link mặc định (dòng để trống tên).';
     else if (!c) why = 'Chưa có "' + o.carrier + '" trong sheet DM_VanChuyen.';
     else if (!c.url) why = 'Chưa điền link tra cứu cho "' + c.name + '" trong DM_VanChuyen.';
-    return `<div class="o-track"><span>Mã vận đơn${o.carrier ? ' ' + esc(o.carrier) : ''}:</span><code>${esc(o.tracking)}</code>${action}` +
+    return `<div class="o-track"><span>Mã vận đơn${o.carrier ? ' ' + esc(o.carrier) : ''}:</span><code>${codes.map(esc).join('<br>')}</code>${action}` +
       (why && isAdmin() ? `<span class="o-lock" style="flex-basis:100%">${esc(why)}</span>` : '') + `</div>`;
   }
   function copyText(t) {
@@ -3000,13 +3049,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const cl = e.target.closest('[data-copylink]');
     if (cl) {
       const o = S.orders[Number(cl.dataset.copylink)];
-      if (copyText(o.tracking)) toast('Đã chép mã ' + o.tracking + '. Dán vào ô tra cứu trên trang vừa mở.');
+      if (copyText(firstCode(o))) toast('Đã chép mã ' + firstCode(o) + '. Dán vào ô tra cứu trên trang vừa mở.');
       return;
     }
     const cp = e.target.closest('[data-copy]');
     if (cp) {
       const o = S.orders[Number(cp.dataset.copy)];
-      toast(copyText(o.tracking) ? 'Đã chép mã ' + o.tracking + '. Dán vào ô tra cứu của hãng.' : 'Không chép tự động được. Bấm giữ vào mã để chép.', false);
+      toast(copyText(firstCode(o)) ? 'Đã chép mã ' + firstCode(o) + '. Dán vào ô tra cứu của hãng.' : 'Không chép tự động được. Bấm giữ vào mã để chép.', false);
       return;
     }
     const ms = e.target.closest('[data-mgsel]');
@@ -3097,6 +3146,241 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       loadOrders();
     } catch (err) { fail(err); }
     finally { busy(btn, false); }
+  });
+
+
+  const IMP = { table: [], head: 0, labels: [] };
+  const IMP_KEYS = {
+    phone: ['dt nhan', 'sdt nhan', 'sdt nguoi nhan', 'so dien thoai nguoi nhan', 'dien thoai nhan', 'so dien thoai', 'dien thoai', 'sdt', 'dt', 'phone', 'tel', 'mobile'],
+    track: ['so hieu buu gui', 'ma van don', 'van don', 'ma buu gui', 'buu gui', 'tracking', 'ma bill', 'bill', 'so hieu', 'ma don'],
+    fee: ['cuoc thuc te tong cuoc', 'cuoc van chuyen', 'tong cuoc thuc te', 'tong cuoc', 'phi van chuyen', 'tien cuoc', 'cuoc phi', 'cuoc', 'phi ship', 'phi giao'],
+    name: ['ten nguoi nhan', 'nguoi nhan ho va ten', 'nguoi nhan', 'ten khach', 'khach hang', 'receiver', 'consignee', 'ho va ten', 'ten'],
+    code: ['ma don hang', 'ma tu quan', 'ma ctv', 'ma khach', 'order id', 'ma don'],
+    addr: ['dia chi nguoi nhan', 'nguoi nhan dia chi', 'dia chi nhan', 'dia chi giao', 'dia chi']
+  };
+  const IMP_BAD = {
+    phone: ['nguoi gui', 'gui', 'khi phat'],
+    track: ['lo', 'cms', 'hop dong', 'dich vu', 'nguoi gui'],
+    fee: ['tam tinh', 'khi phat', 'thu ho', 'khai gia', 'chuyen tiep', 'luu kho', 'khuyen mai', 'xem hang', 'tong phi', 'hinh thuc', 'nguoi tra', 'cuoc chinh', 'gia tri gia tang', 'vas', 'vat', 'dich vu'],
+    name: ['nguoi gui', 'gui', 'khi phat', 'dia chi', 'tinh', 'quoc gia', 'hop dong', 'dien thoai', 'sdt', 'dt', 'xa', 'phuong', 'quan', 'huyen', 'nguoi tao', 'ten hang', 'dich vu'],
+    code: ['lo', 'hieu', 'van don', 'cms', 'hop dong', 'noi dung', 'chi tiet', 'trang thai', 'nguoi gui'],
+    addr: ['gui', 'khi phat']
+  };
+  function impFold(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().trim(); }
+  function impLetter(n) { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  function impNum(v) {
+    let s = String(v == null ? '' : v).replace(/[^\d.,-]/g, '');
+    if (!s) return null;
+    if (/^-?\d{1,3}([.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, '');
+    else if (s.indexOf(',') >= 0 && s.indexOf('.') < 0) s = s.replace(',', '.');
+    else s = s.replace(/,/g, '');
+    const n = Number(s);
+    return isNaN(n) ? null : n;
+  }
+  function parseCsv(text) {
+    const first = text.split('\n')[0];
+    const cnt = ch => first.split(ch).length;
+    const delim = cnt('\t') > cnt(';') && cnt('\t') > cnt(',') ? '\t' : (cnt(';') > cnt(',') ? ';' : ',');
+    const rows = [];
+    let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else if (c !== '\r') cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  function impLoadXlsx() {
+    if (window.XLSX) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = $('impLibUrl').dataset.u;
+      sc.onload = res;
+      sc.onerror = () => rej(new Error('Không tải được thư viện đọc Excel. Hãy lưu file thành CSV rồi chọn lại.'));
+      document.head.appendChild(sc);
+    });
+  }
+  async function impRead(file) {
+    if (file.size > 8 * 1048576) throw new Error('File quá lớn (tối đa 8 MB).');
+    const buf = await file.arrayBuffer();
+    if (/\.(csv|txt)$/i.test(file.name)) {
+      let t = new TextDecoder('utf-8').decode(buf);
+      if (t.indexOf('\uFFFD') >= 0) { try { t = new TextDecoder('windows-1258').decode(buf); } catch (e) { t = t; } }
+      return parseCsv(t.replace(/^\uFEFF/, ''));
+    }
+    await impLoadXlsx();
+    const wb = window.XLSX.read(buf, { type: 'array' });
+    return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+  }
+  function impNorm(s) { return impFold(s).replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function impHas(h, k) { return (' ' + h + ' ').indexOf(' ' + k + ' ') >= 0; }
+  function impTxt(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+  function impIsSub(h, n) {
+    if (!h || !n) return false;
+    let miss = 0;
+    for (let j = 0; j < n.length; j++) {
+      const b = impTxt(n[j]);
+      if (b && /^\d{7,}$/.test(b.replace(/\s/g, ''))) return false;
+      if (b && !impTxt(h[j])) miss++;
+    }
+    return miss >= 3 && h.filter(c => impTxt(c)).length >= 3;
+  }
+  function impLabels(i) {
+    const h = IMP.table[i] || [], n = IMP.table[i + 1];
+    const sub = impIsSub(h, n);
+    const w = Math.max(h.length, sub ? n.length : 0);
+    const out = [];
+    let par = '';
+    for (let j = 0; j < w; j++) {
+      const a = impTxt(h[j]), b = sub ? impTxt(n[j]) : '';
+      if (a) par = a;
+      out.push(sub ? (b ? (a || par) + ' ' + b : a) : a);
+    }
+    return { labels: out, sub: sub };
+  }
+  function impPickAll(labels) {
+    const heads = labels.map(impNorm);
+    const used = {};
+    const pick = f => {
+      for (const k2 of IMP_KEYS[f]) {
+        const j = heads.findIndex((h, n) => h && !used[n] && impHas(h, k2) && !IMP_BAD[f].some(x => impHas(h, x)));
+        if (j >= 0) { used[j] = true; return j; }
+      }
+      return -1;
+    };
+    const r = {};
+    ['phone', 'track', 'fee', 'name', 'code', 'addr'].forEach(f => { r[f] = pick(f); });
+    return r;
+  }
+  function impDetect() {
+    const t = IMP.table;
+    let best = -1, bi = 0, bl = null, bp = null;
+    for (let i = 0; i < Math.min(t.length - 1, 15); i++) {
+      if (t[i].filter(c => impTxt(c)).length < 3) continue;
+      const L = impLabels(i);
+      const p = impPickAll(L.labels);
+      let sc = 0;
+      Object.keys(p).forEach(f => { if (p[f] >= 0) sc++; });
+      if (sc > best) { best = sc; bi = i + (L.sub ? 1 : 0); bl = L.labels; bp = p; }
+    }
+    if (!bl) { bl = (t[0] || []).map(impTxt); bp = impPickAll(bl); bi = 0; }
+    IMP.head = bi; IMP.labels = bl;
+    return bp;
+  }
+  function impFill(sel, heads, val) {
+    sel.innerHTML = '<option value="-1">— không dùng —</option>' +
+      heads.map((h, j) => `<option value="${j}">${impLetter(j)}: ${esc(String(h).slice(0, 40) || '(trống)')}</option>`).join('');
+    sel.value = String(val);
+  }
+  function impSample() {
+    const rows = impRows().slice(0, 3);
+    const ex = rows.map(r => [r.name || '(không tên)', r.phone || '(không SĐT)', r.code || '(không mã đơn)', r.track || '(không mã vận đơn)', r.fee == null ? '(không cước)' : r.fee + 'k'].join(' | ')).join('\n');
+    $('impSample').textContent = 'Dòng tiêu đề: dòng ' + (IMP.head + 1) + ' · ' + Math.max(0, IMP.table.length - IMP.head - 1) + ' dòng dữ liệu bên dưới. Kiểm tra các cột đã chọn. Mẫu (Tên | SĐT | Mã đơn | Mã vận đơn | Cước):\n' + ex;
+    $('impSample').style.whiteSpace = 'pre-line';
+  }
+  function impSetupMap() {
+    const pk = impDetect();
+    const heads = IMP.labels;
+    impFill($('iName'), heads, pk.name); impFill($('iPhone'), heads, pk.phone);
+    impFill($('iTrack'), heads, pk.track); impFill($('iFee'), heads, pk.fee);
+    impFill($('iCode'), heads, pk.code); impFill($('iAddr'), heads, pk.addr);
+    let mx = 0;
+    if (pk.fee >= 0) for (let i = IMP.head + 1; i < IMP.table.length; i++) { const n = impNum(IMP.table[i][pk.fee]); if (n != null && n > mx) mx = n; }
+    $('iUnit').value = mx >= 1000 ? 'dong' : 'k';
+    const names = Array.from(new Set(S.meta.carriers.map(c => c.name).filter(Boolean)));
+    $('iCarrier').innerHTML = '<option value="">Không đổi</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    impSample();
+    $('impMap').hidden = false;
+    $('impPrev').disabled = false;
+    impReset();
+  }
+  function impReset() { $('impRes').innerHTML = ''; $('impGo').hidden = true; $('impGo').disabled = true; }
+  function impRows() {
+    const c = { name: Number($('iName').value), phone: Number($('iPhone').value), code: Number($('iCode').value), track: Number($('iTrack').value), fee: Number($('iFee').value), addr: Number($('iAddr').value) };
+    const div = $('iUnit').value === 'dong' ? 1000 : 1;
+    const out = [];
+    for (let i = IMP.head + 1; i < IMP.table.length; i++) {
+      const r = IMP.table[i];
+      const g = j => (j >= 0 && r[j] != null) ? String(r[j]).trim() : '';
+      if (!g(c.phone) && !g(c.track) && !g(c.code)) continue;
+      const f = impNum(g(c.fee));
+      out.push({ name: g(c.name), phone: g(c.phone), code: g(c.code), track: g(c.track), fee: f == null ? null : f / div, addr: g(c.addr) });
+    }
+    return out;
+  }
+  function impOrderLine(o) {
+    return esc(o.ts) + ' · ' + (o.src === 'le' ? 'Khách lẻ' : esc(o.code)) + ' · ' + kf(o.amount) + ' · ' + esc(o.product) + (o.tracking ? ' · <b>mã hiện có: ' + esc(o.tracking.replace(/\n/g, ', ')) + '</b>' : '');
+  }
+  function impRender(res, done) {
+    const sec = (title, list, fn, warn) => list.length
+      ? `<div class="mg-box"><div class="mg-t${warn ? ' imp-warn' : ''}">${title} (${list.length})</div>${list.map(x => '<div class="imp-line">' + fn(x) + '</div>').join('')}</div>` : '';
+    const who = x => '<b>' + esc(x.name || '(không tên)') + '</b> · ' + esc(x.phone || x.code) + (x.tracks.length ? ' · mã ' + esc(x.tracks.join(', ')) : '') + (x.fee > 0 ? ' · cước ' + kf(x.fee) : '');
+    const manual = res.hasCode.filter(x => !x.same), same = res.hasCode.filter(x => x.same);
+    let html = `<div class="mg-box"><div class="mg-t">${done ? 'ĐÃ GHI ' + res.applied + ' ĐƠN' : 'KẾT QUẢ XEM TRƯỚC'}</div>` +
+      `<div>${res.groups} khách trong file · khớp 1 đơn: <b>${res.matched.length}</b> · đơn đã có mã khác (nhập tay): <b>${manual.length}</b> · khớp nhiều đơn: <b>${res.multi.length}</b> · không thấy đơn: <b>${res.none.length}</b> · dòng bỏ qua: <b>${res.skippedRows.length}</b></div></div>`;
+    html += sec('ĐƠN ĐÃ CÓ MÃ VẬN ĐƠN KHÁC - HÃY NHẬP TAY', manual, x => who(x) + '<br>' + x.orders.map(impOrderLine).join('<br>'), true);
+    html += sec('KHỚP NHIỀU ĐƠN - CHỌN TAY', res.multi, x => who(x) + '<br>' + x.orders.map(impOrderLine).join('<br>'), true);
+    html += sec('KHÔNG TÌM THẤY ĐƠN', res.none, who, true);
+    html += sec('DÒNG BỎ QUA', res.skippedRows, x => 'Dòng ' + x.line + ': ' + esc(x.why) + (x.name ? ' · ' + esc(x.name) : ''), true);
+    html += sec(done ? 'ĐÃ GHI VÀO ĐƠN' : 'SẼ GHI VÀO ĐƠN', res.matched.slice(0, 80), x => who(x) + '<br>' + impOrderLine(x.order));
+    if (res.matched.length > 80) html += `<p class="count">… và ${res.matched.length - 80} đơn khác.</p>`;
+    html += sec('ĐÃ NHẬP RỒI (mã trùng với file)', same, who);
+    $('impRes').innerHTML = html;
+  }
+  $('btnImport').addEventListener('click', () => {
+    $('impFile').value = ''; $('impMap').hidden = true; $('impPrev').disabled = true; impReset();
+    $('impDlg').showModal();
+  });
+  $('impClose').addEventListener('click', () => $('impDlg').close());
+  $('impFile').addEventListener('change', async () => {
+    const f = $('impFile').files[0];
+    if (!f) return;
+    try {
+      $('impRes').innerHTML = '<p class="count">Đang đọc file…</p>';
+      IMP.table = await impRead(f);
+      if (IMP.table.length < 2) throw new Error('File không có dữ liệu.');
+      impSetupMap();
+    } catch (err) { $('impMap').hidden = true; $('impPrev').disabled = true; $('impRes').innerHTML = ''; fail(err); }
+  });
+  ['iName', 'iPhone', 'iCode', 'iAddr', 'iTrack', 'iFee', 'iUnit', 'iCarrier', 'iShip'].forEach(id => $(id).addEventListener('change', () => { impReset(); impSample(); }));
+  function impCall(apply) {
+    const rows = impRows();
+    if (!rows.length) { toast('Không đọc được dòng dữ liệu nào. Kiểm tra cột SĐT / Mã đơn hàng.', true); return null; }
+    if (Number($('iPhone').value) < 0 && Number($('iCode').value) < 0) { toast('Chọn cột SĐT hoặc cột Mã đơn hàng.', true); return null; }
+    if (Number($('iPhone').value) < 0 && Number($('iName').value) < 0) { toast('File không có SĐT: cần chọn cột Tên người nhận.', true); return null; }
+    if (Number($('iTrack').value) < 0 && Number($('iFee').value) < 0) { toast('Chọn cột Mã vận đơn hoặc cột Cước.', true); return null; }
+    return api('importShip', S.token, rows, { apply: apply, carrier: $('iCarrier').value, markShipped: $('iShip').checked });
+  }
+  $('impPrev').addEventListener('click', async () => {
+    const p = impCall(false);
+    if (!p) return;
+    const btn = $('impPrev');
+    busy(btn, true, 'Đang đối chiếu…');
+    try {
+      const res = await p;
+      impRender(res, false);
+      $('impGo').hidden = false; $('impGo').disabled = res.matched.length === 0;
+    } catch (err) { fail(err); } finally { busy(btn, false); }
+  });
+  $('impGo').addEventListener('click', async () => {
+    if (!confirm('Ghi mã vận đơn và cước vào các đơn khớp? Đơn đã có mã vận đơn sẽ không bị đổi.')) return;
+    const p = impCall(true);
+    if (!p) return;
+    const btn = $('impGo');
+    busy(btn, true, 'Đang ghi…');
+    try {
+      const res = await p;
+      impRender(res, true);
+      $('impGo').hidden = true;
+      toast('Đã ghi ' + res.applied + ' đơn.');
+      loadOrders();
+    } catch (err) { fail(err); } finally { busy(btn, false); }
   });
 
   async function deleteOrderUi(o, btn) {
