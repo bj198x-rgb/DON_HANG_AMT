@@ -1386,21 +1386,29 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   $('fPhone').addEventListener('input', () => checkPhone(false));
   $('fPhone').addEventListener('blur', () => { checkPhone(true); });
 
+  function dupItems() {
+    if (!S.meta) return [];
+    return Array.from(document.querySelectorAll('#items .item')).map(r => ({ p: S.meta.products[r.querySelector('.it-p').value], qty: Number(r.querySelector('.it-q').value) }))
+      .filter(i => i.p && Number.isInteger(i.qty) && i.qty >= 1).map(i => ({ name: i.p.name, qty: i.qty }));
+  }
   function dupQuery() {
     const p = normPhone($('fPhone').value);
     if (!validPhone(p)) return null;
-    if (S.editing) return { phone: p, row: S.editing.row, src: S.editing.src || 'ctv' };
-    if (isRetail()) return { phone: p, retail: true };
-    if (isAdmin()) { const c = $('fCtv').value; return c ? { phone: p, code: c } : null; }
-    return { phone: p };
+    const items = dupItems();
+    if (S.editing) return { phone: p, row: S.editing.row, src: S.editing.src || 'ctv', items: items };
+    if (isRetail()) return { phone: p, retail: true, items: items };
+    if (isAdmin()) { const c = $('fCtv').value; return c ? { phone: p, code: c, items: items } : null; }
+    return { phone: p, items: items };
   }
-  function dupKey(q) { return q ? [q.phone, q.retail ? 'le' : '', q.code || '', q.row || ''].join('|') : ''; }
+  function dupKey(q) { return q ? [q.phone, q.retail ? 'le' : '', q.code || '', q.row || '', q.items.map(i => i.qty + ' ' + i.name).join(';')].join('|') : ''; }
   function renderDup(list) {
     const el = $('dupWarn');
     if (!list || !list.length) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
-    el.innerHTML = '<b class="tag">⚠ TRÙNG</b>SĐT này đã có <b>' + list.length + ' đơn</b> trong 24 giờ qua. Kiểm tra lại để tránh nhập trùng:<ul>' +
-      list.map(x => '<li><b>' + esc(x.ts) + '</b> · ' + esc(x.receiver) + ' · ' + esc(x.address) + '<br>' + esc(x.product) + ' · ' + kf(x.amount) + '</li>').join('') + '</ul>';
+    const same = list.filter(x => x.same).length;
+    el.innerHTML = (same ? '<b class="tag">⚠ TRÙNG ĐƠN</b>Đã có <b>' + same + ' đơn cùng SĐT và cùng sản phẩm</b> trong 24 giờ qua. Nếu vẫn lưu, dòng đơn trên sheet sẽ được tô màu và ghi chú để Admin kiểm tra:'
+      : '<b class="tag">ℹ CÙNG SĐT</b>SĐT này đã có <b>' + list.length + ' đơn</b> trong 24 giờ qua (sản phẩm khác). Kiểm tra lại để tránh nhập trùng:') + '<ul>' +
+      list.map(x => '<li>' + (x.same ? '<b class="tag">GIỐNG</b>' : '') + '<b>' + esc(x.ts) + '</b> · ' + esc(x.receiver) + ' · ' + esc(x.address) + '<br>' + esc(x.product) + ' · ' + kf(x.amount) + '</li>').join('') + '</ul>';
   }
   async function runDup(force) {
     const q = dupQuery(), key = dupKey(q);
@@ -2332,6 +2340,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     recalcItems();
   });
   function recalcItems() {
+    scheduleDup();
     let total = 0, n = 0;
     const rows = Array.from(document.querySelectorAll('#items .item'));
     const its = rows.map(row => ({ p: S.meta.products[row.querySelector('.it-p').value],
@@ -2772,9 +2781,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       if (!isAdmin()) return toast(gst.msg + ' Bớt quà hoặc liên hệ Admin.', true);
       if (!confirm('⚠ ' + gst.msg + '\n\nAdmin vẫn muốn lưu đơn với số quà này?')) return;
     }
-    const dups = await runDup(!S.dup || Date.now() - (S.dup.at || 0) > 60000);
-    if (dups.length && !confirm('⚠ TRÙNG ĐƠN: SĐT ' + o.phone + ' đã có ' + dups.length + ' đơn trong 24 giờ qua:\n\n' +
-      dups.map(x => '• ' + x.ts + ' · ' + x.receiver + ' · ' + x.product + ' · ' + kf(x.amount)).join('\n') + '\n\nVẫn lưu đơn này?')) return;
+    const dups = (await runDup(!S.dup || Date.now() - (S.dup.at || 0) > 60000)).filter(x => x.same);
+    if (dups.length && !confirm('⚠ TRÙNG ĐƠN: đã có ' + dups.length + ' đơn cùng SĐT ' + o.phone + ' và cùng sản phẩm trong 24 giờ qua:\n\n' +
+      dups.map(x => '• ' + x.ts + ' · ' + x.receiver + ' · ' + x.product + ' · ' + kf(x.amount)).join('\n') +
+      (editing ? '' : '\n\nNếu vẫn lưu, đơn được ghi nhận nhưng dòng đơn trên sheet sẽ được tô màu kèm ghi chú để Admin kiểm tra.') + '\n\nVẫn lưu đơn này?')) return;
     const addrBad = addrIssue();
     if (addrBad && !confirm('⚠ ' + addrBad + '\n\nĐịa chỉ không khớp danh mục hành chính trước sáp nhập, dễ bị lạc đơn. Vẫn lưu?')) return;
 
