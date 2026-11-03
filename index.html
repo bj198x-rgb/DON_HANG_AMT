@@ -1075,7 +1075,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     <div class="dlg-body">
       <h2>Tổng hợp vật tư</h2>
       <p class="count" id="supNote"></p>
-      <div id="supTable"></div>
+      <div id="supTable" style="user-select:text;-webkit-user-select:text"></div>
+      <p class="count" id="supMsg"></p>
+      <textarea id="supTa" readonly rows="9" hidden style="width:100%;font:inherit;font-size:14px;padding:8px;border:1px solid #bbb;border-radius:8px"></textarea>
     </div>
     <div class="dlg-foot">
       <button class="btn" type="button" id="supCopy">📋 Sao chép</button>
@@ -1108,7 +1110,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   <form method="dialog" onsubmit="return false;">
     <div class="dlg-body">
       <h2>Nhập file vận đơn</h2>
-      <p class="count">Chọn file Excel (.xlsx) hoặc CSV tải từ hãng vận chuyển. App tự nhận diện cột của VNPost và Viettel, điền mã vận đơn và cước vận chuyển (cột Z) vào đơn khớp SĐT + tên người nhận (file không có SĐT thì khớp theo Mã đơn hàng + tên người nhận). Đơn đã có mã vận đơn thì bỏ qua và báo lại.</p>
+      <p class="count">Chọn file Excel (.xlsx) hoặc CSV tải từ hãng vận chuyển. App tự nhận diện cột của VNPost và Viettel, điền mã vận đơn và cước vận chuyển (cột Z) vào đơn khớp SĐT + tên người nhận (file không có SĐT thì khớp theo Mã đơn hàng + tên người nhận). Đơn đã có mã vận đơn thì không đổi mã; nếu file có cột Trạng thái / Lý do thì cập nhật theo mã vận đơn: giao thành công → tick Đã ship; hoàn → ghi &quot;HOÀN: lý do&quot; vào đầu ô Ghi chú (ghi chú cũ giữ phía sau). Các trạng thái khác chỉ được báo lại.</p>
       <div class="field"><label for="impFile">File</label><input type="file" id="impFile" accept=".xlsx,.xls,.csv,.txt,text/csv"></div>
       <div id="impMap" hidden>
         <div class="row2">
@@ -1118,6 +1120,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <div class="row2">
           <div class="field"><label for="iTrack">Cột Mã vận đơn</label><select id="iTrack"></select></div>
           <div class="field"><label for="iFee">Cột Cước / Phí ship</label><select id="iFee"></select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="iStatus">Cột Trạng thái hãng</label><select id="iStatus"></select></div>
+          <div class="field"><label for="iReason">Cột Lý do (hoàn / phát không thành công)</label><select id="iReason"></select></div>
         </div>
         <div class="row2">
           <div class="field"><label for="iCode">Cột Mã đơn hàng (chỉ để khớp, không ghi vào đơn)</label><select id="iCode"></select></div>
@@ -3091,13 +3097,21 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       (why && isAdmin() ? `<span class="o-lock" style="flex-basis:100%">${esc(why)}</span>` : '') + `</div>`;
   }
   function copyText(t) {
+    const host = document.querySelector('dialog[open]') || document.body;
     const ta = document.createElement('textarea');
-    ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
+    ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.width = '1px'; ta.style.height = '1px'; ta.style.opacity = '0';
+    host.appendChild(ta); ta.focus(); ta.select();
+    try { ta.setSelectionRange(0, t.length); } catch (err) { }
     let ok = false;
     try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
     ta.remove();
     return ok;
+  }
+  async function copyAny(t) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(t); return true; }
+    } catch (err) { }
+    return copyText(t);
   }
 
   $('orderList').addEventListener('click', e => {
@@ -3211,7 +3225,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     fee: ['cuoc thuc te tong cuoc', 'cuoc van chuyen', 'tong cuoc thuc te', 'tong cuoc', 'phi van chuyen', 'tien cuoc', 'cuoc phi', 'cuoc', 'phi ship', 'phi giao'],
     name: ['ten nguoi nhan', 'nguoi nhan ho va ten', 'nguoi nhan', 'ten khach', 'khach hang', 'receiver', 'consignee', 'ho va ten', 'ten'],
     code: ['ma don hang', 'ma tu quan', 'ma ctv', 'ma khach', 'order id', 'ma don'],
-    addr: ['dia chi nguoi nhan', 'nguoi nhan dia chi', 'dia chi nhan', 'dia chi giao', 'dia chi']
+    addr: ['dia chi nguoi nhan', 'nguoi nhan dia chi', 'dia chi nhan', 'dia chi giao', 'dia chi'],
+    status: ['trang thai'],
+    reason: ['ly do phat khong thanh cong', 'ly do']
   };
   const IMP_BAD = {
     phone: ['nguoi gui', 'gui', 'khi phat'],
@@ -3219,7 +3235,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     fee: ['tam tinh', 'khi phat', 'thu ho', 'khai gia', 'chuyen tiep', 'luu kho', 'khuyen mai', 'xem hang', 'tong phi', 'hinh thuc', 'nguoi tra', 'cuoc chinh', 'gia tri gia tang', 'vas', 'vat', 'dich vu'],
     name: ['nguoi gui', 'gui', 'khi phat', 'dia chi', 'tinh', 'quoc gia', 'hop dong', 'dien thoai', 'sdt', 'dt', 'xa', 'phuong', 'quan', 'huyen', 'nguoi tao', 'ten hang', 'dich vu'],
     code: ['lo', 'hieu', 'van don', 'cms', 'hop dong', 'noi dung', 'chi tiet', 'trang thai', 'nguoi gui'],
-    addr: ['gui', 'khi phat']
+    addr: ['gui', 'khi phat'],
+    status: ['doi soat', 'thanh toan', 'cod'],
+    reason: []
   };
   function impFold(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().trim(); }
   function impLetter(n) { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
@@ -3310,7 +3328,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       return -1;
     };
     const r = {};
-    ['phone', 'track', 'fee', 'name', 'code', 'addr'].forEach(f => { r[f] = pick(f); });
+    ['phone', 'track', 'fee', 'name', 'code', 'addr', 'status', 'reason'].forEach(f => { r[f] = pick(f); });
     return r;
   }
   function impDetect() {
@@ -3345,6 +3363,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     impFill($('iName'), heads, pk.name); impFill($('iPhone'), heads, pk.phone);
     impFill($('iTrack'), heads, pk.track); impFill($('iFee'), heads, pk.fee);
     impFill($('iCode'), heads, pk.code); impFill($('iAddr'), heads, pk.addr);
+    impFill($('iStatus'), heads, pk.status); impFill($('iReason'), heads, pk.reason);
     let mx = 0;
     if (pk.fee >= 0) for (let i = IMP.head + 1; i < IMP.table.length; i++) { const n = impNum(IMP.table[i][pk.fee]); if (n != null && n > mx) mx = n; }
     $('iUnit').value = mx >= 1000 ? 'dong' : 'k';
@@ -3357,7 +3376,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   }
   function impReset() { $('impRes').innerHTML = ''; $('impGo').hidden = true; $('impGo').disabled = true; }
   function impRows() {
-    const c = { name: Number($('iName').value), phone: Number($('iPhone').value), code: Number($('iCode').value), track: Number($('iTrack').value), fee: Number($('iFee').value), addr: Number($('iAddr').value) };
+    const c = { name: Number($('iName').value), phone: Number($('iPhone').value), code: Number($('iCode').value), track: Number($('iTrack').value), fee: Number($('iFee').value), addr: Number($('iAddr').value), status: Number($('iStatus').value), reason: Number($('iReason').value) };
     const div = $('iUnit').value === 'dong' ? 1000 : 1;
     const out = [];
     for (let i = IMP.head + 1; i < IMP.table.length; i++) {
@@ -3365,7 +3384,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       const g = j => (j >= 0 && r[j] != null) ? String(r[j]).trim() : '';
       if (!g(c.phone) && !g(c.track) && !g(c.code)) continue;
       const f = impNum(g(c.fee));
-      out.push({ name: g(c.name), phone: g(c.phone), code: g(c.code), track: g(c.track), fee: f == null ? null : f / div, addr: g(c.addr) });
+      out.push({ name: g(c.name), phone: g(c.phone), code: g(c.code), track: g(c.track), fee: f == null ? null : f / div, addr: g(c.addr), status: g(c.status), reason: g(c.reason) });
     }
     return out;
   }
@@ -3377,7 +3396,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       ? `<div class="mg-box"><div class="mg-t${warn ? ' imp-warn' : ''}">${title} (${list.length})</div>${list.map(x => '<div class="imp-line">' + fn(x) + '</div>').join('')}</div>` : '';
     const who = x => '<b>' + esc(x.name || '(không tên)') + '</b> · ' + esc(x.phone || x.code) + (x.tracks.length ? ' · mã ' + esc(x.tracks.join(', ')) : '') + (x.fee > 0 ? ' · cước ' + kf(x.fee) : '');
     const manual = res.hasCode.filter(x => !x.same), same = res.hasCode.filter(x => x.same);
-    let html = `<div class="mg-box"><div class="mg-t">${done ? 'ĐÃ GHI ' + res.applied + ' ĐƠN' : 'KẾT QUẢ XEM TRƯỚC'}</div>` +
+    let html = `<div class="mg-box"><div class="mg-t">${done ? 'ĐÃ GHI ' + res.applied + ' ĐƠN' + (res.statusApplied ? ' · CẬP NHẬT TRẠNG THÁI ' + res.statusApplied + ' ĐƠN' : '') : 'KẾT QUẢ XEM TRƯỚC'}</div>` +
       `<div>${res.groups} khách trong file · khớp 1 đơn: <b>${res.matched.length}</b> · đơn đã có mã khác (nhập tay): <b>${manual.length}</b> · khớp nhiều đơn: <b>${res.multi.length}</b> · không thấy đơn: <b>${res.none.length}</b> · dòng bỏ qua: <b>${res.skippedRows.length}</b></div></div>`;
     html += sec('ĐƠN ĐÃ CÓ MÃ VẬN ĐƠN KHÁC - HÃY NHẬP TAY', manual, x => who(x) + '<br>' + x.orders.map(impOrderLine).join('<br>'), true);
     html += sec('KHỚP NHIỀU ĐƠN - CHỌN TAY', res.multi, x => who(x) + '<br>' + x.orders.map(impOrderLine).join('<br>'), true);
@@ -3386,6 +3405,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     html += sec(done ? 'ĐÃ GHI VÀO ĐƠN' : 'SẼ GHI VÀO ĐƠN', res.matched.slice(0, 80), x => who(x) + '<br>' + impOrderLine(x.order));
     if (res.matched.length > 80) html += `<p class="count">… và ${res.matched.length - 80} đơn khác.</p>`;
     html += sec('ĐÃ NHẬP RỒI (mã trùng với file)', same, who);
+    const upd = res.updates || [];
+    const actText = x => x.act === 'return' ? '→ Ghi HOÀN vào Ghi chú: <b>' + esc(x.reason || x.status) + '</b>'
+      : (x.act === 'ship' ? '→ Tick Đã ship (hãng: ' + esc(x.status) + ')' : '(không đổi: ' + esc(x.why) + ')');
+    html += sec(done ? 'ĐÃ CẬP NHẬT TRẠNG THÁI THEO HÃNG' : 'SẼ CẬP NHẬT TRẠNG THÁI THEO HÃNG', upd.slice(0, 80),
+      x => '<b>' + esc(x.receiver || '(không tên)') + '</b> · ' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ' · mã ' + esc(x.tracks.join(', ')) + '<br>' + actText(x));
+    if (upd.length > 80) html += `<p class="count">… và ${upd.length - 80} đơn khác.</p>`;
+    if (res.otherStatus) html += `<p class="count">${res.otherStatus} đơn đang ở trạng thái khác (đang giao, đang vận chuyển…): không thay đổi.</p>`;
     $('impRes').innerHTML = html;
   }
   function supplyTotals() {
@@ -3417,9 +3443,23 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         '</tbody><tfoot><tr><td><b>Tổng</b></td><td><b>' + t.total + '</b></td></tr></tfoot></table></div>'
       : '<p class="empty">Không có đơn nào đang hiển thị. Lọc đơn trước rồi bấm lại.</p>';
     $('supCopy').disabled = !t.rows.length;
+    $('supMsg').textContent = ''; $('supTa').hidden = true;
     $('supDlg').showModal();
   });
-  $('supCopy').addEventListener('click', () => toast(copyText(supplyText(supplyTotals())) ? 'Đã sao chép danh sách vật tư.' : 'Không sao chép được, hãy bôi đen và chép tay.', false));
+  $('supCopy').addEventListener('click', async () => {
+    const txt = supplyText(supplyTotals());
+    const ta = $('supTa');
+    ta.value = txt;
+    const ok = await copyAny(txt);
+    if (ok) {
+      ta.hidden = true;
+      $('supMsg').textContent = '✔ Đã sao chép. Mở Zalo / ghi chú rồi dán.';
+    } else {
+      ta.hidden = false; ta.focus(); ta.select();
+      try { ta.setSelectionRange(0, txt.length); } catch (err) { }
+      $('supMsg').textContent = 'Máy chặn việc tự sao chép. Danh sách đã được bôi đen ở khung dưới: nhấn Ctrl+C (điện thoại: giữ tay vào khung, chọn Sao chép).';
+    }
+  });
   $('supClose').addEventListener('click', () => $('supDlg').close());
   $('btnToday').addEventListener('click', () => { $('tdMsg').textContent = ''; $('todayDlg').showModal(); });
   $('tdClose').addEventListener('click', () => $('todayDlg').close());
@@ -3448,7 +3488,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       impSetupMap();
     } catch (err) { $('impMap').hidden = true; $('impPrev').disabled = true; $('impRes').innerHTML = ''; fail(err); }
   });
-  ['iName', 'iPhone', 'iCode', 'iAddr', 'iTrack', 'iFee', 'iUnit', 'iCarrier', 'iShip'].forEach(id => $(id).addEventListener('change', () => { impReset(); impSample(); }));
+  ['iName', 'iPhone', 'iCode', 'iAddr', 'iTrack', 'iFee', 'iStatus', 'iReason', 'iUnit', 'iCarrier', 'iShip'].forEach(id => $(id).addEventListener('change', () => { impReset(); impSample(); }));
   function impCall(apply) {
     const rows = impRows();
     if (!rows.length) { toast('Không đọc được dòng dữ liệu nào. Kiểm tra cột SĐT / Mã đơn hàng.', true); return null; }
@@ -3465,11 +3505,11 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     try {
       const res = await p;
       impRender(res, false);
-      $('impGo').hidden = false; $('impGo').disabled = res.matched.length === 0;
+      $('impGo').hidden = false; $('impGo').disabled = res.matched.length === 0 && !(res.updates || []).some(x => x.act !== 'skip');
     } catch (err) { fail(err); } finally { busy(btn, false); }
   });
   $('impGo').addEventListener('click', async () => {
-    if (!confirm('Ghi mã vận đơn và cước vào các đơn khớp? Đơn đã có mã vận đơn sẽ không bị đổi.')) return;
+    if (!confirm('Ghi mã vận đơn, cước vào các đơn khớp và cập nhật trạng thái theo hãng (giao thành công → tick Đã ship; hoàn → ghi lý do vào Ghi chú)? Mã vận đơn đã có sẽ không bị đổi.')) return;
     const p = impCall(true);
     if (!p) return;
     const btn = $('impGo');
@@ -3478,7 +3518,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       const res = await p;
       impRender(res, true);
       $('impGo').hidden = true;
-      toast('Đã ghi ' + res.applied + ' đơn.');
+      toast('Đã ghi ' + res.applied + ' đơn' + (res.statusApplied ? ', cập nhật trạng thái ' + res.statusApplied + ' đơn.' : '.'));
       loadOrders();
     } catch (err) { fail(err); } finally { busy(btn, false); }
   });
