@@ -751,7 +751,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <div class="field ship-box">
           <span class="lbl">🚚 Phí ship <span class="req">*</span></span>
           <div class="ship-promo">
-            <div class="sp sp-n"><b>KHÔNG SALE</b><span class="fs">FREE SHIP từ<em>600K</em></span></div>
+            <div class="sp sp-n"><b>KHÔNG SALE</b><span class="fs">FREE SHIP từ<em>800K</em></span></div>
             <div class="sp sp-s"><b>SALE</b><span class="fs">FREE SHIP từ<em>1000K</em></span></div>
           </div>
           <div class="ships" id="fShips"></div>
@@ -805,6 +805,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <button type="button" class="btn" id="btnToday">📦 Đi hôm nay</button>
         <button type="button" class="btn ghost" id="btnImport">📥 Nhập vận đơn</button>
         <span id="impLibUrl" data-u="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" hidden></span>
+      </div>
+      <div class="imp-box" id="supBox" hidden>
+        <button type="button" class="btn ghost" id="btnSupply">🧰 Tổng hợp vật tư các đơn đang hiển thị</button>
       </div>
       <div class="mg-bar" id="mergeBar" hidden>
         <b id="mgCount"></b>
@@ -1067,6 +1070,20 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   </form>
 </dialog>
 
+<dialog id="supDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2>Tổng hợp vật tư</h2>
+      <p class="count" id="supNote"></p>
+      <div id="supTable"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" type="button" id="supCopy">📋 Sao chép</button>
+      <button class="btn ghost" type="button" id="supClose">Đóng</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="todayDlg">
   <form method="dialog" onsubmit="return false;">
     <div class="dlg-body">
@@ -1325,6 +1342,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('sCtvWrap').hidden = !isAdmin();
     $('btnSummary').hidden = !isAdmin();
     $('impBox').hidden = !isAdmin();
+    $('supBox').hidden = !isAdmin();
     $('arcPanel').hidden = !isAdmin();
     $('arcResult').innerHTML = '';
     if (isAdmin()) {
@@ -1351,14 +1369,15 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   }
   function getShip() { const el = document.querySelector('input[name=ship]:checked'); return el ? el.value : ''; }
   function setShip(v) { document.querySelectorAll('input[name=ship]').forEach(el => { el.checked = el.value === v; }); updateShipWarn(); }
+  const FREE_MIN = 800, FREE_SALE = 1000;
   function updateShipWarn() {
     const box = $('shipWarn');
     if (!box) return;
     const sv = getShip();
     const amt = num($('fAmount').value);
     const isFree = String(sv).toLowerCase().indexOf('free') >= 0;
-    const low = isFree && amt !== null && amt > 0 && amt < 600 && !isBu();
-    if (low) box.innerHTML = '<b>Chưa đủ điều kiện Free Ship.</b> Số tiền thu hiện tại ' + esc(kf(amt)) + ', thấp hơn mức tối thiểu 600K. Free Ship áp dụng từ 600K (KHÔNG SALE) hoặc từ 1000K (SALE). Vui lòng kiểm tra lại số tiền thu hoặc phương án phí ship trước khi lưu đơn.';
+    const low = isFree && amt !== null && amt > 0 && amt < FREE_MIN && !isBu();
+    if (low) box.innerHTML = '<b>Chưa đủ điều kiện Free Ship.</b> Số tiền thu hiện tại ' + esc(kf(amt)) + ', thấp hơn mức tối thiểu ' + FREE_MIN + 'K. Free Ship áp dụng từ ' + FREE_MIN + 'K (KHÔNG SALE) hoặc từ ' + FREE_SALE + 'K (SALE). Nếu vẫn Free Ship cho khách, phí ship của đơn này sau này sẽ được trừ vào hoa hồng của CTV. Vui lòng kiểm tra lại số tiền thu hoặc phương án phí ship trước khi lưu đơn.';
     box.hidden = !low;
   }
 
@@ -2781,6 +2800,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       if (!isAdmin()) return toast(gst.msg + ' Bớt quà hoặc liên hệ Admin.', true);
       if (!confirm('⚠ ' + gst.msg + '\n\nAdmin vẫn muốn lưu đơn với số quà này?')) return;
     }
+    const freeLow = !isBu() && /free/i.test(o.ship) && Number(o.amount) > 0 && Number(o.amount) < FREE_MIN;
+    if (freeLow && !confirm('⚠ CHƯA ĐỦ ĐIỀU KIỆN FREE SHIP: số tiền thu ' + kf(o.amount) + ', thấp hơn ' + FREE_MIN + 'K (không sale) / ' + FREE_SALE + 'K (sale).\n\nNếu vẫn Free Ship cho khách, phí ship của đơn này sau này sẽ được trừ vào hoa hồng của CTV.\n\nVẫn lưu đơn với Free Ship?')) return;
     const dups = (await runDup(!S.dup || Date.now() - (S.dup.at || 0) > 60000)).filter(x => x.same);
     if (dups.length && !confirm('⚠ TRÙNG ĐƠN: đã có ' + dups.length + ' đơn cùng SĐT ' + o.phone + ' và cùng sản phẩm trong 24 giờ qua:\n\n' +
       dups.map(x => '• ' + x.ts + ' · ' + x.receiver + ' · ' + x.product + ' · ' + kf(x.amount)).join('\n') +
@@ -3367,6 +3388,39 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     html += sec('ĐÃ NHẬP RỒI (mã trùng với file)', same, who);
     $('impRes').innerHTML = html;
   }
+  function supplyTotals() {
+    const map = {};
+    let used = 0, skipped = 0;
+    (S.orders || []).forEach(o => {
+      if (o.state === 'returned') { skipped++; return; }
+      used++;
+      String(o.product || '').split('\n').forEach(line => {
+        const m = line.trim().match(/^(\d+)\s*(?:x\s+)?(.+)$/i);
+        if (!m) return;
+        const key = skey(m[2]);
+        if (!map[key]) map[key] = { name: m[2].trim(), qty: 0 };
+        map[key].qty += Number(m[1]);
+      });
+    });
+    const rows = Object.keys(map).map(x => map[x]).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'vi'));
+    return { rows: rows, used: used, skipped: skipped, total: rows.reduce((t, r) => t + r.qty, 0) };
+  }
+  function supplyText(t) {
+    return 'VẬT TƯ CẦN CHUẨN BỊ (' + t.used + ' đơn)\n' + t.rows.map(r => '- ' + r.qty + ' ' + r.name).join('\n') + '\nTổng: ' + t.total + ' sản phẩm';
+  }
+  $('btnSupply').addEventListener('click', () => {
+    const t = supplyTotals();
+    $('supNote').textContent = 'Gộp từ ' + t.used + ' đơn đang hiển thị' + (t.skipped ? ' (bỏ ' + t.skipped + ' đơn hoàn)' : '') + '. Combo đã được tách thành từng sản phẩm.';
+    $('supTable').innerHTML = t.rows.length
+      ? '<div class="table-wrap"><table><thead><tr><th>Sản phẩm</th><th>Số lượng</th></tr></thead><tbody>' +
+        t.rows.map(r => '<tr><td>' + esc(r.name) + '</td><td><b>' + r.qty + '</b></td></tr>').join('') +
+        '</tbody><tfoot><tr><td><b>Tổng</b></td><td><b>' + t.total + '</b></td></tr></tfoot></table></div>'
+      : '<p class="empty">Không có đơn nào đang hiển thị. Lọc đơn trước rồi bấm lại.</p>';
+    $('supCopy').disabled = !t.rows.length;
+    $('supDlg').showModal();
+  });
+  $('supCopy').addEventListener('click', () => toast(copyText(supplyText(supplyTotals())) ? 'Đã sao chép danh sách vật tư.' : 'Không sao chép được, hãy bôi đen và chép tay.', false));
+  $('supClose').addEventListener('click', () => $('supDlg').close());
   $('btnToday').addEventListener('click', () => { $('tdMsg').textContent = ''; $('todayDlg').showModal(); });
   $('tdClose').addEventListener('click', () => $('todayDlg').close());
   async function todayRun(action, btn) {
