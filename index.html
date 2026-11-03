@@ -530,6 +530,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .mg-chk input { width: 20px; height: 20px; accent-color: var(--green); }
   .imp-warn { color: #B3261E; font-weight: 700; }
   .imp-box { margin: 0 0 10px; }
+  .imp-box:not([hidden]) { display: flex; gap: 8px; }
+  .imp-box .btn { flex: 1; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+  .td-grid { display: grid; gap: 8px; margin-top: 6px; }
   #impRes .mg-box div { font-size: 14px; }
   #impRes .mg-box .imp-line { padding: 6px 0; border-top: 1px dashed var(--line); }
   #impRes .mg-box .imp-line:first-of-type { border-top: 0; }
@@ -799,7 +802,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       </div>
       <p class="count" id="orderCount"></p>
       <div class="imp-box" id="impBox" hidden>
-        <button type="button" class="btn ghost" id="btnImport">📥 Nhập file vận đơn (Excel / CSV)</button>
+        <button type="button" class="btn" id="btnToday">📦 Đi hôm nay</button>
+        <button type="button" class="btn ghost" id="btnImport">📥 Nhập vận đơn</button>
         <span id="impLibUrl" data-u="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" hidden></span>
       </div>
       <div class="mg-bar" id="mergeBar" hidden>
@@ -1059,6 +1063,26 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     <div class="dlg-foot">
       <button class="btn ghost" type="button" id="mCancel">Hủy</button>
       <button class="btn" type="button" id="mOk">Xác nhận gộp</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="todayDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2>Đơn đi hôm nay</h2>
+      <p class="count">Áp dụng cho sheet DS xuất hàng. Tick từng đơn ngay trên sheet (cột ĐI HN), rồi dùng các nút dưới đây để ẩn / hiện.</p>
+      <div class="field"><label for="tdSrc">Sheet</label><select id="tdSrc"><option value="ctv">DS xuất hàng CTV</option><option value="le">DS xuất hàng Lẻ</option><option value="all">Cả 2 sheet</option></select></div>
+      <div class="td-grid">
+        <button class="btn" type="button" id="tdOnly">✅ Chỉ hiện đơn đi hôm nay</button>
+        <button class="btn ghost" type="button" id="tdHide">🙈 Ẩn các đơn đã tick</button>
+        <button class="btn ghost" type="button" id="tdShow">👁 Hiện tất cả</button>
+        <button class="btn ghost" type="button" id="tdClear">♻️ Bỏ tick ĐI HN hết</button>
+      </div>
+      <div class="hint" id="tdMsg"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" type="button" id="tdClose">Đóng</button>
     </div>
   </form>
 </dialog>
@@ -3333,6 +3357,18 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     html += sec('ĐÃ NHẬP RỒI (mã trùng với file)', same, who);
     $('impRes').innerHTML = html;
   }
+  $('btnToday').addEventListener('click', () => { $('tdMsg').textContent = ''; $('todayDlg').showModal(); });
+  $('tdClose').addEventListener('click', () => $('todayDlg').close());
+  async function todayRun(action, btn) {
+    if (action === 'clear' && !confirm('Bỏ tick ĐI HN của TẤT CẢ các đơn trong sheet đã chọn?')) return;
+    busy(btn, true, 'Đang chạy…');
+    try {
+      const res = await api('xuatHangThaoTac', S.token, $('tdSrc').value, action);
+      $('tdMsg').textContent = res.message + '.';
+      toast(res.message + '.');
+    } catch (err) { fail(err); } finally { busy(btn, false); }
+  }
+  [['tdOnly', 'only'], ['tdHide', 'hide'], ['tdShow', 'show'], ['tdClear', 'clear']].forEach(p => $(p[0]).addEventListener('click', () => todayRun(p[1], $(p[0]))));
   $('btnImport').addEventListener('click', () => {
     $('impFile').value = ''; $('impMap').hidden = true; $('impPrev').disabled = true; impReset();
     $('impDlg').showModal();
