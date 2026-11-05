@@ -560,6 +560,15 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
            padding: 12px 18px; border-radius: 8px; max-width: 90vw; z-index: 50; display: none; font-weight: 600; }
   #toast.err { background: var(--red); }
   #toast.show { display: block; }
+  #postChip { position: fixed; right: 10px; top: calc(10px + env(safe-area-inset-top)); background: var(--ink); color: #fff; padding: 7px 12px;
+              border-radius: 999px; font-weight: 700; font-size: 14px; z-index: 55; display: none; }
+  #postChip.show { display: block; }
+  #saveFail { position: fixed; left: 8px; right: 8px; top: calc(52px + env(safe-area-inset-top)); z-index: 56; display: none; max-height: 62vh; overflow: auto; }
+  #saveFail.show { display: block; }
+  #saveFail .sf { background: var(--red-soft); border: 2px solid var(--red); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 15px; }
+  #saveFail .sf b { color: var(--red); }
+  #saveFail .sf-act { display: flex; gap: 8px; margin-top: 8px; }
+  #saveFail .sf-act button { flex: 1; }
 
   #print-area { display: none; }
   .pw-err { color: var(--red); font-weight: 700; min-height: 1.3em; margin: 0 0 6px; }
@@ -1178,6 +1187,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
 
 <div id="print-area"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="postChip" role="status" aria-live="polite"></div>
+<div id="saveFail"></div>
 
 <script>
 (function () {
@@ -1909,10 +1920,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (t.split(/\s+/).length > 6) return false;
     return !ADDR_WORDS.test(fold(t));
   }
-  function splitLead(s) {
-    const m = String(s || '').trim().match(/^([^\n,|]+?)(\n|,|\s[\-–|]\s)([\s\S]+)$/);
-    return m ? { head: m[1], sep: m[2], tail: m[3] } : null;
-  }
   function placeLike(s) {
     if (!AD.ready) return false;
     const x = anorm(s), k = akey(s);
@@ -2389,12 +2396,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const lv = stockLevel(p), unit = p && p.combo && !p.isGift ? ' combo' : '';
     if (lv === 'none') return '';
     return lv === 'out' ? ' · 🔴 HẾT HÀNG' : (lv === 'low' ? ' · 🟠 còn ' : ' · 🟢 còn ') + p.stock + unit;
-  }
-  function productOptions() {
-    return '<option value="">Chọn sản phẩm</option>' + S.meta.products.map((p, i) => {
-      const out = stockLevel(p) === 'out' && !S.editing;
-      return `<option value="${i}"${out ? ' disabled' : ''}>${p.combo ? '🎁 ' : ''}${esc(p.name)}${p.size ? ' ' + esc(p.size) : ''} (${kf(p.price)})${stockTag(p)}</option>`;
-    }).join('');
   }
   function stockMap() {
     const m = {};
@@ -2986,10 +2987,15 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         return;
       }
       const quick = !!(S.meta && S.meta.fast);
-      const res = await api('submitOrder', S.token, quick ? Object.assign({}, o, { defer: true }) : o, quick ? null : file);
-      if (res && res.pending) finishInBackground(res, file, retail);
+      if (quick) {
+        enqueueSave({ o: o, file: file, retail: retail, reqId: newReqId(), items: items.filter(i => i.p), uid: curUid() });
+        adjustStock(items);
+        toast('Đã nhận đơn, đang lưu…');
+      } else {
+        await api('submitOrder', S.token, o, file);
+        toast(retail ? 'Đã lưu đơn khách lẻ.' : 'Đã lưu đơn hàng.');
+      }
       rememberCustomer(o.receiver.trim(), o.phone, o.address);
-      toast(retail ? 'Đã lưu đơn khách lẻ.' : 'Đã lưu đơn hàng.');
       const keepCtv = $('fCtv').value;
       $('orderForm').reset();
       $('smartMsg').textContent = '';
@@ -3001,27 +3007,101 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       setSrc(retail ? 'le' : 'ctv');
       checkPhone(false); updateAddrFull();
       S.loaded.orders = false; S.loaded.dash = false;
-      refreshStock(true);
+      if (!quick) refreshStock(true);
     } catch (err) { fail(err); if (/kho/.test(err.message)) refreshStock(true); }
     finally { busy(btn, false); }
   });
 
-  window.addEventListener('beforeunload', e => { if (S.postFiles > 0) { e.preventDefault(); e.returnValue = ''; } });
-  function finishInBackground(res, file, retail) {
-    const info = { row: res.row, ts: res.ts, retail: retail };
-    const hasFile = !!file;
-    if (hasFile) S.postFiles = (S.postFiles || 0) + 1;
+  S.outbox = []; S.failed = [];
+  function curUid() { return S.meta && S.meta.user ? S.meta.user.code : ''; }
+  function newReqId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9); }
+  function myFailed() { return S.failed.filter(j => j.uid === curUid()); }
+  window.addEventListener('beforeunload', e => { if (S.outbox.length || S.failed.length) { e.preventDefault(); e.returnValue = ''; } });
+  function waitPosts() { return S.post ? Promise.race([S.post, new Promise(r => setTimeout(r, 20000))]) : null; }
+  function showChip() {
+    const n = S.outbox.length, f = myFailed().length, c = $('postChip');
+    if (!n && !f) { c.className = ''; c.textContent = ''; return; }
+    c.className = 'show';
+    c.textContent = n ? '⏳ Đang lưu ' + n + ' đơn…' + (f ? ' · ' + f + ' đơn lỗi' : '') : '⚠ ' + f + ' đơn chưa lưu được';
+  }
+  function renderFail() {
+    const box = $('saveFail'), list = myFailed();
+    if (!list.length) { box.className = ''; box.innerHTML = ''; return; }
+    box.className = 'show';
+    box.innerHTML = list.map((j, i) => `<div class="sf"><b>⚠ CHƯA LƯU ĐƯỢC ĐƠN</b><br>${esc(j.o.receiver)} · ${esc(j.o.phone)}<br>` +
+      `${esc(j.items.map(x => x.qty + ' ' + x.p.name).join(', '))} · ${kf(j.o.amount)}<br><i>${esc(j.err)}</i>` +
+      `<div class="sf-act"><button class="btn" type="button" data-sf="retry" data-i="${i}">Lưu lại</button>` +
+      `<button class="btn ghost" type="button" data-sf="drop" data-i="${i}">Bỏ đơn này</button></div></div>`).join('');
+  }
+  $('saveFail').addEventListener('click', e => {
+    const b = e.target.closest('button[data-sf]');
+    if (!b) return;
+    const j = myFailed()[Number(b.dataset.i)];
+    if (!j) return;
+    if (b.dataset.sf === 'drop' && !confirm('Bỏ đơn của ' + j.o.receiver + '? Đơn này chưa được lưu vào sheet.')) return;
+    S.failed = S.failed.filter(x => x !== j);
+    renderFail(); showChip();
+    if (b.dataset.sf === 'retry') enqueueSave(j);
+  });
+  function enqueueSave(job) {
+    S.outbox.push(job); showChip();
     const prev = S.post || Promise.resolve();
-    const p = prev.then(() => api('finishOrder', S.token, info, file)).then(() => {
-      if (hasFile) toast('Đã tải ảnh bill lên.');
-    }).catch(err => {
-      if (err.silent) return;
-      toast('Đơn đã được lưu, nhưng bước hoàn tất báo lỗi' + (hasFile ? ' (ảnh bill CHƯA tải lên, hãy gửi lại ảnh cho Admin)' : '') + ': ' + err.message, true);
-    }).then(() => {
-      if (hasFile) S.postFiles = Math.max(0, (S.postFiles || 1) - 1);
-      if (S.post === p) S.post = null;
-    });
+    const p = prev.then(() => runSave(job)).catch(() => {}).then(() => { if (S.post === p) S.post = null; });
     S.post = p;
+  }
+  async function runSave(job) {
+    let res = null;
+    try {
+      res = await api('submitOrder', S.token, Object.assign({}, job.o, { defer: true, reqId: job.reqId }), null);
+    } catch (err) {
+      S.outbox = S.outbox.filter(x => x !== job);
+      job.err = err.message || 'Lỗi không rõ';
+      S.failed.push(job);
+      showChip(); renderFail();
+      if (/kho/.test(job.err)) refreshStock(true);
+      return;
+    }
+    let warn = '';
+    if (res && res.pending) {
+      try {
+        const fin = await api('finishOrder', S.token, { row: res.row, ts: res.ts, retail: job.retail }, job.file);
+        if (fin && fin.ms && isAdmin()) console.log('finishOrder ms', JSON.stringify(fin.ms));
+      } catch (err) {
+        warn = 'Đơn đã được lưu, nhưng bước hoàn tất báo lỗi' + (job.file ? ' (ảnh bill CHƯA tải lên, hãy gửi lại ảnh cho Admin)' : '') + ': ' + err.message;
+      }
+    }
+    S.outbox = S.outbox.filter(x => x !== job);
+    showChip();
+    if (res && res.ms && isAdmin()) console.log('submitOrder ms', JSON.stringify(res.ms));
+    const who = job.o.receiver.trim();
+    if (warn) toast(warn, true);
+    else toast((job.retail ? 'Đã lưu đơn khách lẻ: ' : 'Đã lưu đơn: ') + who + (job.file ? ' (kèm ảnh bill)' : '') +
+      (res && res.ms && isAdmin() ? ' · máy chủ ' + (res.ms.tong / 1000).toFixed(1) + 's' : ''));
+    if (!S.outbox.length) setTimeout(() => refreshStock(true), 600);
+  }
+  function adjustStock(items) {
+    const byKey = {};
+    S.meta.products.forEach(p => { if (!p.combo) byKey[skey(p.name)] = p; });
+    items.forEach(i => {
+      if (!i.p || !(i.qty > 0)) return;
+      (i.p.combo || [{ name: i.p.name, qty: 1 }]).forEach(c => {
+        const q = byKey[skey(c.name)];
+        if (q && q.stock !== null && q.stock !== undefined) q.stock -= c.qty * i.qty;
+      });
+    });
+    S.meta.products.forEach(p => {
+      if (!p.combo) return;
+      let st = null;
+      p.combo.forEach((c, j) => {
+        const q = byKey[skey(c.name)];
+        const cs = q && q.stock !== null && q.stock !== undefined ? q.stock : null;
+        if (p.comboStock) p.comboStock[j] = cs;
+        if (cs === null) return;
+        const n = Math.floor(Math.max(0, cs) / c.qty);
+        st = st === null ? n : Math.min(st, n);
+      });
+      p.stock = st;
+    });
   }
   function applyStock(r) {
     if (!r || !r.products || !S.meta) return;
@@ -3134,7 +3214,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('orderCount').textContent = '';
     $('orderList').innerHTML = '<p class="empty">Đang tải đơn hàng…</p>';
     try {
-      if (S.post) await S.post;
+      await waitPosts();
       const src = isAdmin() ? $('oSrc').value : 'ctv';
       const flt = {
         month: $('oMonth').value, code: isAdmin() && src !== 'le' ? $('oCtv').value : '', shipped: $('oShipped').value, q: $('oQ').value,
@@ -3833,7 +3913,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const opts = Object.assign(periodRange(), { code: isAdmin() ? $('dCtv').value : '' });
     $('dashRev').innerHTML = isAdmin() ? '<p class="empty">Đang tổng hợp doanh thu…</p>' : '';
     try {
-      if (S.post) await S.post;
+      await waitPosts();
       const res = await Promise.all([
         api('getDashboard', S.token, opts),
         isAdmin() ? api('getReport', S.token, opts) : Promise.resolve(null),
@@ -4155,7 +4235,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
 
   $('btnSettle').addEventListener('click', loadSettle);
   async function loadSettle(live) {
-    if (S.post) await S.post;
+    await waitPosts();
     if (!isAdmin()) {
       if (!$('sMonth').value) return toast('Chọn tháng.', true);
       S.loaded.settle = true;
