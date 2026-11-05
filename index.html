@@ -2220,7 +2220,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('fSrcWrap').hidden = !admin || !!S.editing;
     $('fCtvWrap').hidden = !admin || !!S.editing || le;
     $('fRoleWrap').hidden = le;
-    $('leInfo').hidden = !le;
+    $('leInfo').hidden = true;
     $('orderForm').classList.toggle('is-le', le);
     syncCtvPickers();
     updReceiverHint();
@@ -2571,9 +2571,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('noteHint').textContent = bu ? 'Không dùng chữ "hoàn" trong lý do bù (app sẽ hiểu là đơn hoàn). Ghi "bị trả về", "giao lỗi"...'
       : isRetail() ? 'Ghi chú có từ "hoàn" sẽ được tính là đơn hoàn (không tính doanh thu).'
       : 'Ghi chú có từ "hoàn" sẽ được tính là đơn hoàn (hoa hồng 0).';
-    const hideNote = isAdmin() && !bu && !S.editing;
-    $('noteWrap').hidden = hideNote;
-    if (hideNote) $('fNote').value = '';
     if (!S.editing) $('btnSubmit').textContent = bu ? 'Lưu đơn bù' : isRetail() ? 'Lưu đơn khách lẻ' : 'Lưu đơn hàng';
     if (bu) $('fAmount').value = 0;
     else if (!S.amountDirty) $('fAmount').value = S.itemsTotal || ($('fAmount').value === '0' ? '' : $('fAmount').value);
