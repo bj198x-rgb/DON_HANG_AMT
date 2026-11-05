@@ -345,6 +345,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .badge.wait { background: var(--sun-soft); color: #6B4A0B; border: 1px solid var(--sun); }
   .badge.bad { background: var(--red); color: #fff; }
   .badge.prep { background: #E3F0FB; color: #134A7C; border: 1px solid #7FB2DE; }
+  .link.pick { color: #134A7C; }
+  .link.pick.on { color: #1B7A3A; }
   .o-prep { margin-top: 6px; font-size: 14px; font-weight: 700; color: #134A7C; }
   .link.danger { color: var(--red); }
   .dup-warn { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #FDECEA; border: 2px solid var(--red);
@@ -807,7 +809,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <span id="impLibUrl" data-u="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" hidden></span>
       </div>
       <div class="imp-box" id="supBox" hidden>
-        <button type="button" class="btn ghost" id="btnSupply">🧰 Tổng hợp vật tư các đơn đang hiển thị</button>
+        <button type="button" class="btn ghost" id="btnSupply">🧰 Tổng hợp vật tư (từ DS xuất hàng)</button>
       </div>
       <div class="mg-bar" id="mergeBar" hidden>
         <b id="mgCount"></b>
@@ -935,7 +937,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <h3>3. Trạng thái đơn</h3>
         <ul>
           <li><b>Chưa đi</b>: đơn đang chờ gửi.</li>
-          <li><b>Đang chuẩn bị hàng</b>: Admin đã ghi ngày ship (cột V) nhưng chưa tick Đã ship (cột U).</li>
+          <li><b>Đang chuẩn bị hàng</b>: đơn đã được đánh dấu ĐI HÔM NAY (nút 📦 hoặc tick cột ĐI HN trên Sheet), hoặc cột O (Trạng thái) của DS xuất hàng có chữ, hoặc Admin đã ghi ngày ship (cột V) nhưng chưa tick Đã ship (cột U).</li>
           <li><b>🗑 Xóa đơn</b>: CTV/Đại lý xóa được đơn của mình khi đơn còn Chưa đi (chưa ship, chưa chuẩn bị hàng); Admin xóa được mọi đơn. Đơn đã xóa được lưu lại ở sheet "Đơn đã xóa".</li>
           <li><b>⚠ TRÙNG</b>: khi nhập SĐT đã có đơn của bạn trong 24 giờ qua, app hiện cảnh báo kèm đơn trước để bạn so lại. Vẫn lưu được nếu đúng là đơn mới.</li>
           <li><b>Đã ship</b>: đơn đã gửi đi, được tính là phát thành công. App hiện ngày ship và đơn vị vận chuyển.</li>
@@ -963,7 +965,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <ul>
           <li>Tab <b>Đơn hàng</b> và <b>Dashboard</b> mặc định hiện tháng này, sang tháng mới tự chuyển. Bấm <b>Tháng trước</b> hoặc <b>Tùy chỉnh</b> (chọn Từ ngày – Đến ngày, tối đa 366 ngày) để xem đơn các kỳ trước, kể cả đơn chưa đi.</li>
           <li><b>Nhập file vận đơn</b> (Admin): ở tab <b>Đơn hàng</b> bấm <b>Nhập file vận đơn</b>, chọn file Excel hoặc CSV của hãng vận chuyển, kiểm tra các cột app nhận diện (SĐT, tên, mã vận đơn, cước), bấm <b>Xem trước</b> rồi <b>Ghi vào đơn</b>. App khớp theo SĐT + tên người nhận, ghi mã vận đơn (nhiều mã thì mỗi mã 1 dòng), cộng cước vào cột Cước vận chuyển, tick Đã ship + ngày hôm nay. Đơn đã có mã vận đơn, khớp nhiều đơn hoặc không tìm thấy sẽ được liệt kê để bạn nhập tay.</li>
-          <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận, SĐT, địa chỉ (cả hai chưa ship) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền và CỘNG DỒN sản phẩm của các đơn (cùng sản phẩm thì cộng số lượng). Các đơn còn lại giữ dòng nhưng tiền về 0, không còn sản phẩm (sản phẩm đã chuyển lên đơn trên, ghi trong ghi chú "Ghép với đơn trên") và không đổ sang bảng xuất hàng. Hoa hồng tự tính lại.</li>
+          <li><b>Gộp đơn</b>: khách đặt 2 đơn trở lên cùng tên người nhận và SĐT, cùng tháng (địa chỉ có thể khác nhau; cả hai chưa ship, chưa chuẩn bị hàng) thì ở tab <b>Đơn hàng</b> tick ô <b>Chọn để gộp</b> trên từng đơn, rồi bấm <b>Gộp các đơn đã chọn</b>. Đơn cũ nhất nhận tổng tiền và CỘNG DỒN sản phẩm của các đơn (cùng sản phẩm thì cộng số lượng). Các đơn còn lại giữ dòng nhưng tiền về 0, không còn sản phẩm (sản phẩm đã chuyển lên đơn trên, ghi trong ghi chú "Ghép với đơn trên") và không đổ sang bảng xuất hàng. Hoa hồng tự tính lại.</li>
           <li>Tick <b>Giữ đăng nhập 7 ngày</b> khi đăng nhập: mỗi lần mở app sẽ vào thẳng, không phải nhập lại. Dùng máy của người khác thì bỏ tick và bấm <b>Đăng xuất</b> khi xong.</li>
           <li>Quên mật khẩu: liên hệ Admin để được cấp lại.</li>
         </ul>
@@ -1074,6 +1076,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   <form method="dialog" onsubmit="return false;">
     <div class="dlg-body">
       <h2>Tổng hợp vật tư</h2>
+      <div class="field"><label for="supSrc">Lấy từ bảng</label><select id="supSrc"><option value="all">Cả 2 bảng (CTV + Lẻ)</option><option value="ctv">DS xuất hàng CTV</option><option value="le">DS xuất hàng Lẻ</option></select></div>
       <p class="count" id="supNote"></p>
       <div id="supTable" style="user-select:text;-webkit-user-select:text"></div>
       <p class="count" id="supMsg"></p>
@@ -1090,12 +1093,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   <form method="dialog" onsubmit="return false;">
     <div class="dlg-body">
       <h2>Đơn đi hôm nay</h2>
-      <p class="count">Áp dụng cho sheet DS xuất hàng. Tick từng đơn ngay trên sheet (cột ĐI HN), rồi dùng các nút dưới đây để ẩn / hiện.</p>
+      <p class="count">Đánh dấu đơn đi hôm nay: bấm nút <b>📦 Đi hôm nay</b> ngay trên từng đơn ở tab Đơn hàng (hoặc tick cột ĐI HN trên Sheet). Đơn đã đánh dấu thành <b>Đang chuẩn bị hàng</b>, CTV không sửa được. Bấm <b>Chốt</b> để ẩn các đơn còn lại trên Sheet; đơn mới đổ về sau đó tự ẩn cho tới khi bấm <b>Hiện tất cả đơn chưa đi</b>.</p>
       <div class="field"><label for="tdSrc">Sheet</label><select id="tdSrc"><option value="ctv">DS xuất hàng CTV</option><option value="le">DS xuất hàng Lẻ</option><option value="all">Cả 2 sheet</option></select></div>
       <div class="td-grid">
-        <button class="btn" type="button" id="tdOnly">✅ Chỉ hiện đơn đi hôm nay</button>
+        <button class="btn" type="button" id="tdMark">📦 Đánh dấu ĐI HÔM NAY cho các đơn chưa đi đang hiển thị</button>
+        <button class="btn ghost" type="button" id="tdUnmark">↩️ Bỏ đánh dấu các đơn đang hiển thị</button>
+        <button class="btn" type="button" id="tdOnly">✅ Chốt: chỉ hiện đơn đi hôm nay</button>
+        <button class="btn ghost" type="button" id="tdShow">👁 Hiện tất cả đơn chưa đi</button>
         <button class="btn ghost" type="button" id="tdHide">🙈 Ẩn các đơn đã tick</button>
-        <button class="btn ghost" type="button" id="tdShow">👁 Hiện tất cả</button>
         <button class="btn ghost" type="button" id="tdClear">♻️ Bỏ tick ĐI HN hết</button>
       </div>
       <div class="hint" id="tdMsg"></div>
@@ -3020,6 +3025,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
             <span class="o-name">${esc(o.receiver)}</span>
             <span class="badge ${rt ? 'bad' : o.shipped ? 'ok' : o.preparing ? 'prep' : 'wait'}">${rt ? '⚠ ' : o.preparing ? '📦 ' : ''}${esc(o.status)}</span>
             ${o.bu ? '<span class="badge bu">🔁 Đơn bù</span>' : ''}
+            ${o.pick ? '<span class="badge prep">✅ ĐI HÔM NAY</span>' : ''}
             ${le ? '<span class="badge le">🛍️ Khách lẻ</span>' : ''}
           </div>
           <div class="o-meta"><span>${esc(o.ts)}</span>${admin && !le ? `<span>${esc(o.code)} ${esc(o.name)}</span>` : ''}</div>
@@ -3037,6 +3043,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           ${o.bu ? `<div class="o-note">Lý do bù: ${esc(o.noteText || '—')}</div>` : o.note ? `<div class="o-note">${esc(o.note)}</div>` : ''}
           ${editLogHtml(o.editLog)}
           <div class="o-actions">
+            ${admin && pickEligible(o) ? `<button type="button" class="link pick${o.pick ? ' on' : ''}" data-pick="${i}">${o.pick ? '✅ Đi hôm nay · bấm để bỏ' : '📦 Đi hôm nay'}</button>` : ''}
             ${String(o.bill).indexOf('https:') === 0 ? `<a href="${esc(o.bill)}" target="_blank" rel="noopener">Xem bill</a>` : ''}
             ${mergeOk(o) ? `<label class="mg-chk"><input type="checkbox" data-mgsel="${i}"${S.mgSel[i] ? ' checked' : ''}> Chọn để gộp</label>` : ''}
             <button type="button" class="link" data-print="${i}">In phiếu</button>
@@ -3127,6 +3134,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       toast(copyText(firstCode(o)) ? 'Đã chép mã ' + firstCode(o) + '. Dán vào ô tra cứu của hãng.' : 'Không chép tự động được. Bấm giữ vào mã để chép.', false);
       return;
     }
+    const pk = e.target.closest('[data-pick]');
+    if (pk) { pickToggle(Number(pk.dataset.pick), pk); return; }
     const ms = e.target.closest('[data-mgsel]');
     if (ms) { S.mgSel[Number(ms.dataset.mgsel)] = ms.checked; updateMergeBar(); return; }
     const dp = e.target.closest('[data-dup]');
@@ -3139,6 +3148,40 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (fm) enterEdit(S.orders[Number(fm.dataset.form)]);
   });
 
+  function pickEligible(o) {
+    if (o.pick === undefined || o.state !== 'pending' || o.shipped) return false;
+    return !(String(o.note || '').indexOf('Ghép với đơn trên') >= 0 && !String(o.product || '').trim());
+  }
+  async function pickToggle(i, btn) {
+    const o = S.orders[i];
+    if (!o) return;
+    const on = !o.pick;
+    busy(btn, true, 'Đang lưu…');
+    try {
+      const res = await api('xuatHangDiHomNay', S.token, [{ src: o.src || 'ctv', row: o.row, tsKey: o.tsKey }], on);
+      busy(btn, false);
+      if (!res.changed) { toast('Đơn chưa có trên bảng DS xuất hàng. Đợi vài phút (hoặc Sheet: menu Đơn hàng → Xuất hàng: đổ đơn mới ngay) rồi thử lại.', true); return; }
+      o.pick = on;
+      o.preparing = on;
+      o.status = on ? 'Đang chuẩn bị hàng' : 'Chưa đi';
+      if (on && !o.shipDate) o.shipDate = 'hôm nay';
+      renderOrders();
+      toast(on ? 'Đã đánh dấu ĐI HÔM NAY: ' + o.receiver : 'Đã bỏ đánh dấu: ' + o.receiver);
+    } catch (err) { busy(btn, false); fail(err); }
+  }
+  async function todayMark(on, btn) {
+    const items = (S.orders || []).filter(o => pickEligible(o) && !!o.pick !== on).map(o => ({ src: o.src || 'ctv', row: o.row, tsKey: o.tsKey }));
+    if (!items.length) { $('tdMsg').textContent = on ? 'Không có đơn chưa đi nào đang hiển thị cần đánh dấu.' : 'Không có đơn nào đang được đánh dấu trong danh sách hiển thị.'; return; }
+    if (items.length > 200) { $('tdMsg').textContent = 'Đang hiển thị ' + items.length + ' đơn, tối đa 200 đơn mỗi lần. Lọc bớt (theo CTV / ngày) rồi bấm lại.'; return; }
+    if (!confirm((on ? 'Đánh dấu ĐI HÔM NAY ' : 'Bỏ đánh dấu ') + items.length + ' đơn đang hiển thị?')) return;
+    busy(btn, true, 'Đang lưu…');
+    try {
+      const res = await api('xuatHangDiHomNay', S.token, items, on);
+      $('tdMsg').textContent = (on ? 'Đã đánh dấu ' : 'Đã bỏ đánh dấu ') + res.changed + ' đơn' + (res.missing ? ' (' + res.missing + ' đơn chưa có trên DS xuất hàng, thử lại sau vài phút)' : '') + '.';
+      loadOrders();
+    } catch (err) { fail(err); } finally { busy(btn, false); }
+  }
+
   const MERGE_TAG = 'Ghép với đơn trên';
   function mnorm(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, ''); }
   function mergeOk(o) {
@@ -3147,7 +3190,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     return !!(String(o.receiver || '').trim() && String(o.phone || '').trim());
   }
   function mergeKeyOf(o) {
-    return [mnorm(o.code), String(o.tsKey || '').slice(3, 10), mnorm(o.receiver), mnorm(o.phone), mnorm(o.address)].join('|');
+    return [mnorm(o.code), String(o.tsKey || '').slice(3, 10), mnorm(o.receiver), mnorm(o.phone)].join('|');
   }
   function mergePicked() {
     return Object.keys(S.mgSel || {}).filter(i => S.mgSel[i]).map(Number).sort((a, b) => S.orders[a].row - S.orders[b].row);
@@ -3186,13 +3229,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (idx.length < 2) return toast('Tick ít nhất 2 đơn để gộp.', true);
     const list = idx.map(i => S.orders[i]);
     const key = mergeKeyOf(list[0]);
-    if (list.some(o => mergeKeyOf(o) !== key)) return toast('Chỉ gộp được các đơn cùng người nhận, SĐT, địa chỉ, cùng tháng. Bỏ tick đơn không cùng khách.', true);
+    if (list.some(o => mergeKeyOf(o) !== key)) return toast('Chỉ gộp được các đơn cùng người nhận, SĐT và cùng tháng. Bỏ tick đơn không cùng khách.', true);
     S.merge = list;
     const first = list[0];
     $('mTitle').textContent = 'Gộp ' + list.length + ' đơn của cùng khách';
     $('mSub').innerHTML = esc(first.receiver) + ' · ' + esc(first.phone) + '<br>' + esc(first.address) + (first.src === 'le' ? '' : '<br>' + esc(first.code) + ' ' + esc(first.name));
     $('mInfo').innerHTML = list.map((o, n) => mergeBox(n === 0 ? 'ĐƠN TRÊN (cũ nhất, nhận tiền)' : 'ĐƠN GỘP VÀO (tiền về 0, sản phẩm chuyển lên đơn trên)', o)).join('') +
-      `<div class="mg-box"><div class="mg-t">SAU KHI GỘP, ĐƠN TRÊN CÓ</div><div class="mg-p">${esc(mergedProducts(list))}</div></div>`;
+      `<div class="mg-box"><div class="mg-t">SAU KHI GỘP, ĐƠN TRÊN CÓ</div><div class="mg-p">${esc(mergedProducts(list))}</div></div>` +
+      (new Set(list.map(o => mnorm(o.address))).size > 1 ? `<div class="mg-box"><div class="mg-t imp-warn">ĐỊA CHỈ KHÁC NHAU - ĐƠN TRÊN GIỮ ĐỊA CHỈ CỦA NÓ</div>${list.map(o => '<div class="mg-p">' + esc(o.address) + '</div>').join('')}</div>` : '');
     $('mAmount').value = list.reduce((t, o) => t + (num(o.amount) || 0), 0);
     $('mShip').innerHTML = S.meta.ships.map(x => `<option value="${esc(x)}"${x === first.ship ? ' selected' : ''}>${esc(x)}</option>`).join('');
     $('mergeDlg').showModal();
@@ -3414,40 +3458,34 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (res.otherStatus) html += `<p class="count">${res.otherStatus} đơn đang ở trạng thái khác (đang giao, đang vận chuyển…): không thay đổi.</p>`;
     $('impRes').innerHTML = html;
   }
-  function supplyTotals() {
-    const map = {};
-    let used = 0, skipped = 0;
-    (S.orders || []).forEach(o => {
-      if (o.state === 'returned') { skipped++; return; }
-      used++;
-      String(o.product || '').split('\n').forEach(line => {
-        const m = line.trim().match(/^(\d+)\s*(?:x\s+)?(.+)$/i);
-        if (!m) return;
-        const key = skey(m[2]);
-        if (!map[key]) map[key] = { name: m[2].trim(), qty: 0 };
-        map[key].qty += Number(m[1]);
-      });
-    });
-    const rows = Object.keys(map).map(x => map[x]).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'vi'));
-    return { rows: rows, used: used, skipped: skipped, total: rows.reduce((t, r) => t + r.qty, 0) };
-  }
   function supplyText(t) {
-    return 'VẬT TƯ CẦN CHUẨN BỊ (' + t.used + ' đơn)\n' + t.rows.map(r => '- ' + r.qty + ' ' + r.name).join('\n') + '\nTổng: ' + t.total + ' sản phẩm';
+    return 'VẬT TƯ CẦN CHUẨN BỊ (' + t.orders + ' đơn)\n' + t.rows.map(r => '- ' + r.qty + ' ' + r.name).join('\n') + '\nTổng: ' + t.total + ' sản phẩm';
   }
-  $('btnSupply').addEventListener('click', () => {
-    const t = supplyTotals();
-    $('supNote').textContent = 'Gộp từ ' + t.used + ' đơn đang hiển thị' + (t.skipped ? ' (bỏ ' + t.skipped + ' đơn hoàn)' : '') + '. Combo đã được tách thành từng sản phẩm.';
-    $('supTable').innerHTML = t.rows.length
-      ? '<div class="table-wrap"><table><thead><tr><th>Sản phẩm</th><th>Số lượng</th></tr></thead><tbody>' +
-        t.rows.map(r => '<tr><td>' + esc(r.name) + '</td><td><b>' + r.qty + '</b></td></tr>').join('') +
-        '</tbody><tfoot><tr><td><b>Tổng</b></td><td><b>' + t.total + '</b></td></tr></tfoot></table></div>'
-      : '<p class="empty">Không có đơn nào đang hiển thị. Lọc đơn trước rồi bấm lại.</p>';
-    $('supCopy').disabled = !t.rows.length;
+  async function supplyLoad() {
     $('supMsg').textContent = ''; $('supTa').hidden = true;
-    $('supDlg').showModal();
-  });
+    $('supNote').textContent = '';
+    $('supTable').innerHTML = '<p class="count">Đang đọc bảng DS xuất hàng…</p>';
+    $('supCopy').disabled = true;
+    try {
+      const t = await api('xuatHangVatTu', S.token, $('supSrc').value);
+      S.sup = t;
+      const per = (t.perSheet || []).map(p => (p.src === 'le' ? 'Lẻ ' : 'CTV ') + p.orders + ' đơn').join(' · ');
+      $('supNote').textContent = 'Lấy từ bảng DS xuất hàng: ' + t.orders + ' đơn đang hiển thị' + (per ? ' (' + per + ')' : '') + ', khớp dòng TỔNG CỘNG trên Sheet. Dòng đã ẩn hoặc đã lọc không tính.';
+      $('supTable').innerHTML = t.rows.length
+        ? '<div class="table-wrap"><table><thead><tr><th>Sản phẩm</th><th>Số lượng</th></tr></thead><tbody>' +
+          t.rows.map(r => '<tr><td>' + esc(r.name) + '</td><td><b>' + r.qty + '</b></td></tr>').join('') +
+          '</tbody><tfoot><tr><td><b>Tổng</b></td><td><b>' + t.total + '</b></td></tr></tfoot></table></div>'
+        : '<p class="empty">Không có đơn nào đang hiển thị trên bảng DS xuất hàng. Hiện các dòng cần tính trên Sheet rồi bấm lại.</p>';
+      $('supCopy').disabled = !t.rows.length;
+    } catch (err) {
+      $('supTable').innerHTML = '<p class="empty">' + esc(err && err.message ? err.message : String(err)) + '</p>';
+    }
+  }
+  $('btnSupply').addEventListener('click', () => { $('supDlg').showModal(); supplyLoad(); });
+  $('supSrc').addEventListener('change', supplyLoad);
   $('supCopy').addEventListener('click', async () => {
-    const txt = supplyText(supplyTotals());
+    if (!S.sup || !S.sup.rows.length) return;
+    const txt = supplyText(S.sup);
     const ta = $('supTa');
     ta.value = txt;
     const ok = await copyAny(txt);
@@ -3473,6 +3511,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     } catch (err) { fail(err); } finally { busy(btn, false); }
   }
   [['tdOnly', 'only'], ['tdHide', 'hide'], ['tdShow', 'show'], ['tdClear', 'clear']].forEach(p => $(p[0]).addEventListener('click', () => todayRun(p[1], $(p[0]))));
+  $('tdMark').addEventListener('click', () => todayMark(true, $('tdMark')));
+  $('tdUnmark').addEventListener('click', () => todayMark(false, $('tdUnmark')));
   $('btnImport').addEventListener('click', () => {
     $('impFile').value = ''; $('impMap').hidden = true; $('impPrev').disabled = true; impReset();
     $('impDlg').showModal();
