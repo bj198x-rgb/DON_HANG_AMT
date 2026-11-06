@@ -1217,6 +1217,16 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       runner[fn](...args);
     });
   }
+  function isLockErr(err) { return /chờ khóa|giữ khóa|lock timeout/i.test(String((err && err.message) || '').normalize('NFC')); }
+  async function apiLock(fn, ...args) {
+    for (let i = 0; ; i++) {
+      try { return await api(fn, ...args); }
+      catch (err) {
+        if (i >= 2 || !isLockErr(err)) throw err;
+        await new Promise(r => setTimeout(r, 3000 * (i + 1)));
+      }
+    }
+  }
   function fail(e) { if (!e.silent) toast(e.message, true); }
   let toastTimer;
   function toast(msg, isErr) {
@@ -3076,7 +3086,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   async function runSave(job) {
     let res = null;
     try {
-      res = await api('submitOrder', S.token, Object.assign({}, job.o, { defer: true, reqId: job.reqId }), null);
+      res = await apiLock('submitOrder', S.token, Object.assign({}, job.o, { defer: true, reqId: job.reqId }), null);
     } catch (err) {
       S.outbox = S.outbox.filter(x => x !== job);
       job.err = err.message || 'Lỗi không rõ';
@@ -3088,7 +3098,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     let warn = '';
     if (res && res.pending) {
       try {
-        const fin = await api('finishOrder', S.token, { row: res.row, ts: res.ts, retail: job.retail }, job.file);
+        const fin = await apiLock('finishOrder', S.token, { row: res.row, ts: res.ts, retail: job.retail }, job.file);
         if (fin && fin.ms && isAdmin()) console.log('finishOrder ms', JSON.stringify(fin.ms));
       } catch (err) {
         warn = 'Đơn đã được lưu, nhưng bước hoàn tất báo lỗi' + (job.file ? ' (ảnh bill CHƯA tải lên, hãy gửi lại ảnh cho Admin)' : '') + ': ' + err.message;
