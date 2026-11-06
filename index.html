@@ -926,7 +926,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <h3>1. Nhập đơn hàng</h3>
         <ol>
           <li>Mở tab <b>Nhập đơn</b>, chọn vai trò của bạn (CTV hoặc Đại lý).</li>
-          <li><b>⚡ Nhập nhanh</b>: chép tin nhắn của khách (tên, SĐT, địa chỉ) rồi dán vào ô <b>Nhập nhanh</b>. App tự điền tên, SĐT và tách địa chỉ ra Tỉnh/TP, Quận/Huyện, Phường/Xã, <b>không cần đúng thứ tự</b> (tên, SĐT, địa chỉ để trước sau đều được). Thiếu cấp nào mà suy ra được từ danh mục thì app tự điền và <b>tô vàng</b> ô đó; ô <b>tô đỏ</b> là phần chưa xác định được, cần chọn tay. Dán 1 dòng địa chỉ vào ô Số nhà cũng tự tách. Kiểm tra lại các ô trước khi lưu.</li>
+          <li><b>⚡ Nhập nhanh</b>: chép tin nhắn của khách (tên, SĐT, địa chỉ) rồi dán vào ô <b>Nhập nhanh</b>. App tự điền tên, SĐT và tách địa chỉ ra Tỉnh/TP, Quận/Huyện, Phường/Xã, <b>không cần đúng thứ tự</b> (tên, SĐT, địa chỉ để trước sau đều được). Thiếu cấp nào mà suy ra được từ danh mục thì app tự điền và <b>tô vàng</b> ô đó; ô <b>tô đỏ</b> là phần chưa xác định được, cần chọn tay. Dán 1 dòng địa chỉ vào ô Số nhà cũng tự tách. Kiểm tra lại các ô trước khi lưu. <b>Admin nhập khách lẻ</b>: địa chỉ thiếu Phường/Xã, Quận/Huyện hoặc Tỉnh/TP vẫn lưu được; ô Địa chỉ trên sheet được tô cam kèm ghi chú cho biết còn thiếu gì, bạn sửa ô đó thì màu và ghi chú tự mất.</li>
           <li>Gõ tên hoặc số điện thoại: nếu là <b>khách cũ</b>, app hiện danh sách gợi ý, bấm vào để tự điền SĐT và địa chỉ.</li>
           <li>Số điện thoại phải đúng định dạng Việt Nam (di động 10 số bắt đầu 03, 05, 07, 08, 09). Sai định dạng app sẽ báo đỏ.</li>
           <li>Địa chỉ ghi theo <b>địa chỉ TRƯỚC sáp nhập</b>, đủ 4 ô: <b>Số nhà/đường</b>, <b>Tỉnh/TP</b>, <b>Quận/Huyện</b>, <b>Phường/Xã</b>. Gõ vài chữ cái (không cần dấu) rồi bấm chọn trong danh sách gợi ý. Gõ thẳng tên Phường/Xã thì app tự điền Quận/Huyện và Tỉnh/TP. Ghi theo địa chỉ mới 2 cấp dễ bị lạc đơn.</li>
@@ -1493,18 +1493,29 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       : '<b class="tag">ℹ CÙNG SĐT</b>SĐT này đã có <b>' + list.length + ' đơn</b> trong 24 giờ qua (sản phẩm khác). Kiểm tra lại để tránh nhập trùng:') + '<ul>' +
       list.map(x => '<li>' + (x.same ? '<b class="tag">GIỐNG</b>' : '') + '<b>' + esc(x.ts) + '</b> · ' + esc(x.receiver) + ' · ' + esc(x.address) + '<br>' + esc(x.product) + ' · ' + kf(x.amount) + '</li>').join('') + '</ul>';
   }
+  let dupFly = null;
   async function runDup(force) {
     const q = dupQuery(), key = dupKey(q);
     if (!q) { S.dup = null; renderDup(null); return []; }
     if (!force && S.dup && S.dup.key === key) return S.dup.list;
-    try {
-      const list = await api('checkDuplicate', S.token, q) || [];
-      if (dupKey(dupQuery()) === key) { S.dup = { key: key, list: list, at: Date.now() }; renderDup(list); }
-      return list;
-    } catch (e) { return []; }
+    if (dupFly && dupFly.key === key) return dupFly.p;
+    const p = (async () => {
+      try {
+        const list = await api('checkDuplicate', S.token, q) || [];
+        if (dupKey(dupQuery()) === key) { S.dup = { key: key, list: list, at: Date.now() }; renderDup(list); }
+        return list;
+      } catch (e) { return []; }
+    })();
+    dupFly = { key: key, p: p };
+    p.then(() => { if (dupFly && dupFly.p === p) dupFly = null; });
+    return p;
   }
   let dupTimer = null;
   function scheduleDup() { clearTimeout(dupTimer); dupTimer = setTimeout(() => runDup(false), 600); }
+  $('items').addEventListener('input', scheduleDup);
+  $('items').addEventListener('change', scheduleDup);
+  $('items').addEventListener('click', scheduleDup);
+  $('fCtv').addEventListener('change', scheduleDup);
   $('fPhone').addEventListener('input', scheduleDup);
   $('fPhone').addEventListener('blur', scheduleDup);
   $('fPhone').addEventListener('change', scheduleDup);
@@ -2039,6 +2050,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       (auto.length ? '🟨 App tự điền thêm: ' + auto.join(', ') + '. ' : '') +
       (miss.length ? '⚠ Chưa nhận ra: ' + miss.join(', ') + '. ' : '') + 'Kiểm tra lại trước khi lưu.';
     msg.className = 'smart-msg' + (miss.length ? ' bad' : '');
+    scheduleDup();
   }
   $('btnSmart').addEventListener('click', runSmart);
   $('fSmart').addEventListener('paste', () => { setTimeout(runSmart, 30); });
@@ -2932,15 +2944,26 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       items: items.filter(i => i.p).map(i => ({ name: i.p.name, qty: i.qty })),
       amount: isBu() ? 0 : $('fAmount').value, ship: getShip(), note: $('fNote').value, bu: isBu()
     };
+    const relaxAddr = isAdmin() && retail;
+    if (relaxAddr) {
+      const missA = [];
+      if (!$('fStreet').value.trim()) missA.push('Số nhà/đường');
+      if (!$('fWard').value.trim() && !addrNoWard()) missA.push('Phường/Xã');
+      if (!$('fDistrict').value.trim()) missA.push('Quận/Huyện');
+      if (!$('fProvince').value.trim()) missA.push('Tỉnh/TP');
+      const issueA = addrIssue();
+      o.addrFlag = (missA.length ? 'Thiếu ' + missA.join(', ') + '. ' : '') + (issueA ? 'Không khớp danh mục: ' + issueA : '');
+    }
     const checks = [
       [!editing && isAdmin() && !retail && !o.code, 'Chọn CTV/Đại lý cho đơn hàng.'],
       [!o.role, 'Chọn vai trò người nhập.'],
       [!o.receiver.trim(), 'Chưa điền tên người nhận.'],
       [!checkPhone(true), 'Số điện thoại chưa đúng định dạng Việt Nam. Di động 10 số bắt đầu 03, 05, 07, 08, 09; cố định 11 số bắt đầu 02.'],
-      [!$('fStreet').value.trim(), 'Chưa điền số nhà, đường, thôn/xóm.'],
-      [!$('fWard').value.trim() && !addrNoWard(), 'Chưa điền Phường / Xã (địa chỉ trước sáp nhập).'],
-      [!$('fDistrict').value.trim(), 'Chưa điền Quận / Huyện (địa chỉ trước sáp nhập).'],
-      [!$('fProvince').value.trim(), 'Chưa điền Tỉnh / Thành phố (địa chỉ trước sáp nhập).'],
+      [relaxAddr && !getAddress(), 'Chưa điền địa chỉ nhận hàng (dán cả địa chỉ vào ô Số nhà nếu khách chỉ gửi 1 dòng).'],
+      [!relaxAddr && !$('fStreet').value.trim(), 'Chưa điền số nhà, đường, thôn/xóm.'],
+      [!relaxAddr && !$('fWard').value.trim() && !addrNoWard(), 'Chưa điền Phường / Xã (địa chỉ trước sáp nhập).'],
+      [!relaxAddr && !$('fDistrict').value.trim(), 'Chưa điền Quận / Huyện (địa chỉ trước sáp nhập).'],
+      [!relaxAddr && !$('fProvince').value.trim(), 'Chưa điền Tỉnh / Thành phố (địa chỉ trước sáp nhập).'],
       [items.some(i => !i.p), 'Còn dòng sản phẩm chưa chọn. Chọn sản phẩm hoặc bấm Xóa dòng đó.'],
       [!o.items.length, 'Chọn ít nhất 1 sản phẩm.'],
       [items.some(i => !(Number.isInteger(i.qty) && i.qty >= 1)), 'Số lượng phải là số nguyên từ 1 trở lên.'],
@@ -2959,11 +2982,12 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     }
     const freeLow = !isBu() && /free/i.test(o.ship) && Number(o.amount) > 0 && Number(o.amount) < FREE_MIN;
     if (freeLow && !confirm('⚠ CHƯA ĐỦ ĐIỀU KIỆN FREE SHIP: số tiền thu ' + kf(o.amount) + ', thấp hơn ' + FREE_MIN + 'K (không sale) / ' + FREE_SALE + 'K (sale).\n\nNếu vẫn Free Ship cho khách, phí ship của đơn này sau này sẽ được trừ vào hoa hồng của CTV.\n\nVẫn lưu đơn với Free Ship?')) return;
-    const dups = (await runDup(!S.dup || Date.now() - (S.dup.at || 0) > 60000)).filter(x => x.same);
+    const dupWait = new Promise(r => setTimeout(() => r([]), 1000));
+    const dups = (await Promise.race([runDup(!S.dup || Date.now() - (S.dup.at || 0) > 60000), dupWait])).filter(x => x.same);
     if (dups.length && !confirm('⚠ TRÙNG ĐƠN: đã có ' + dups.length + ' đơn cùng SĐT ' + o.phone + ' và cùng sản phẩm trong 24 giờ qua:\n\n' +
       dups.map(x => '• ' + x.ts + ' · ' + x.receiver + ' · ' + x.product + ' · ' + kf(x.amount)).join('\n') +
       (editing ? '' : '\n\nNếu vẫn lưu, đơn được ghi nhận nhưng dòng đơn trên sheet sẽ được tô màu kèm ghi chú để Admin kiểm tra.') + '\n\nVẫn lưu đơn này?')) return;
-    const addrBad = addrIssue();
+    const addrBad = relaxAddr ? '' : addrIssue();
     if (addrBad && !confirm('⚠ ' + addrBad + '\n\nĐịa chỉ không khớp danh mục hành chính trước sáp nhập, dễ bị lạc đơn. Vẫn lưu?')) return;
 
     const btn = $('btnSubmit');
