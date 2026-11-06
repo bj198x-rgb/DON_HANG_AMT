@@ -1227,6 +1227,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       }
     }
   }
+  function msTop(ms) {
+    const t = Object.keys(ms).filter(k => k !== 'tong' && ms[k] >= 500).sort((x, y) => ms[y] - ms[x]).slice(0, 3);
+    return t.length ? ' (' + t.map(k => k + ' ' + (ms[k] / 1000).toFixed(1) + 's').join(', ') + ')' : '';
+  }
   function fail(e) { if (!e.silent) toast(e.message, true); }
   let toastTimer;
   function toast(msg, isErr) {
@@ -3110,7 +3114,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const who = job.o.receiver.trim();
     if (warn) toast(warn, true);
     else toast((job.retail ? 'Đã lưu đơn khách lẻ: ' : 'Đã lưu đơn: ') + who + (job.file ? ' (kèm ảnh bill)' : '') +
-      (res && res.ms && isAdmin() ? ' · máy chủ ' + (res.ms.tong / 1000).toFixed(1) + 's' : ''));
+      (res && res.ms && isAdmin() ? ' · máy chủ ' + (res.ms.tong / 1000).toFixed(1) + 's' + msTop(res.ms) : ''));
     if (!S.outbox.length) setTimeout(() => refreshStock(true), 600);
   }
   function adjustStock(items) {
