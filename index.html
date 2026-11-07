@@ -132,6 +132,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     .tabs button .tl[data-short]::after { content: attr(data-short); font-size: 11.5px; }
     .tabs button { font-size: 11.5px; }
     #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+    #undoBar { bottom: calc(88px + env(safe-area-inset-bottom)); }
     .bar .wrap { padding-top: 8px; padding-bottom: 8px; }
     .bar img { height: 40px; }
     .bar strong { font-size: 17px; }
@@ -356,6 +357,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .dup-warn b.tag { display: inline-block; background: var(--red); color: #fff; border-radius: 6px; padding: 1px 8px; margin-right: 6px; }
   .dup-warn ul { margin: 6px 0 0; padding-left: 18px; }
   .badge.bu { background: #E6EEF8; color: #1F4E8C; border: 1px solid #5B8BC9; }
+  .badge.disc { background: #FDE7E7; color: #B3261E; border: 1px solid #E58A84; }
   .bu-box { background: #E6EEF8; color: #1F4E8C; border: 1.5px solid #5B8BC9; padding: 12px 14px; border-radius: 8px; font-size: 15px; font-weight: 600; margin-top: 10px; }
   #orderForm.is-bu { box-shadow: inset 0 4px 0 #5B8BC9; }
   .radios label.le-opt.sel { border-color: var(--sun); background: var(--sun); box-shadow: 0 4px 12px rgba(200,144,30,.35); }
@@ -562,6 +564,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
            padding: 12px 18px; border-radius: 8px; max-width: 90vw; z-index: 50; display: none; font-weight: 600; }
   #toast.err { background: var(--red); }
   #toast.show { display: block; }
+  #undoBar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px;
+             max-width: 92vw; z-index: 51; display: none; align-items: center; gap: 12px; font-weight: 600; }
+  #undoBar.show { display: flex; }
+  #undoBar button { background: #fff; color: var(--ink); border: 0; border-radius: 6px; padding: 8px 12px; font-weight: 800; cursor: pointer; }
+  #undoBar button:disabled { opacity: .6; }
+  .del-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; display: grid; gap: 4px; }
+  .del-item .btn { justify-self: start; margin-top: 4px; }
   #postChip { position: fixed; right: 10px; top: calc(10px + env(safe-area-inset-top)); background: var(--ink); color: #fff; padding: 7px 12px;
               border-radius: 999px; font-weight: 700; font-size: 14px; z-index: 55; display: none; }
   #postChip.show { display: block; }
@@ -781,7 +790,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <input type="file" id="fBill" accept="image/*,application/pdf">
           <div class="hint" id="billHint">Ảnh hoặc PDF, tối đa 5 MB.</div>
         </div>
-        <div class="field" id="noteWrap"><label for="fNote" id="noteLabel">Ghi chú</label><textarea id="fNote"></textarea><div class="hint" id="noteHint">Ghi chú có từ "hoàn" sẽ được tính là đơn hoàn (hoa hồng 0).</div></div>
+        <div class="field" id="noteWrap"><label for="fNote" id="noteLabel">Ghi chú</label><textarea id="fNote"></textarea><div class="hint" id="noteHint">Ghi chú có cụm "bị hoàn" sẽ được tính là đơn hoàn (hoa hồng 0).</div></div>
         <button class="btn" id="btnSubmit">Lưu đơn hàng</button>
       </form>
     </section>
@@ -820,6 +829,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <button class="btn" id="btnSearch" type="button">Lọc đơn</button>
       </div>
       <p class="count" id="orderCount"></p>
+      <div class="imp-box" id="delBox"><button type="button" class="btn ghost" id="btnDeleted">↩ Đơn đã xóa (khôi phục)</button></div>
       <div class="imp-box" id="impBox" hidden>
         <button type="button" class="btn" id="btnToday">📦 Đi hôm nay</button>
         <button type="button" class="btn ghost" id="btnImport">📥 Nhập vận đơn</button>
@@ -961,7 +971,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <li><b>Cước vận chuyển</b> thực tế của từng đơn hiện cạnh loại phí ship sau khi Admin cập nhật. Chưa có thì hiện "chờ cập nhật".</li>
           <li><b>👥 Khách hàng</b>: tab Khách hàng là danh bạ khách của bạn (chỉ bạn thấy). Khách tự được lưu mỗi khi nhập đơn; bấm <b>Thêm khách mới</b> để lưu trước. Có ô <b>Ghi chú chăm sóc</b> (hiện ra khi nhập đơn cho khách đó), xem <b>Lịch sử mua</b>, bấm <b>🛒 Nhập đơn</b> để tạo đơn nhanh cho khách.</li>
           <li><b>📋 Sao chép đơn</b>: ở tab Đơn hàng, bấm Sao chép đơn để tạo nhanh đơn mới giống đơn cũ (cùng khách, địa chỉ, sản phẩm). Kiểm tra lại rồi bấm Lưu.</li>
-          <li><b>⚠ Đơn hoàn</b>: ghi chú có từ "hoàn". Đơn tô đỏ, <b>hoa hồng bằng 0</b> và không tính vào doanh số tháng.</li>
+          <li><b>⚠ Đơn hoàn</b>: ghi chú có đủ cụm "bị hoàn" (chữ "hoàn" đứng riêng không tính). Đơn tô đỏ, <b>hoa hồng bằng 0</b> và không tính vào doanh số tháng.</li>
           <li>Đơn có <b>mã vận đơn</b>: bấm <b>Tra hành trình</b> để xem trên trang của hãng vận chuyển. Nếu chỉ có nút <b>Chép mã</b>, chép rồi dán vào trang tra cứu của hãng.</li>
           <li>Ô tìm kiếm ở tab Đơn hàng tìm được theo mã vận đơn.</li>
         </ul>
@@ -1052,7 +1062,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         <div class="field"><label for="eAmount">Số tiền thu (K)</label><input type="number" id="eAmount" min="0" step="any"></div>
         <div class="field"><label for="eShip">Phí ship (L)</label><select id="eShip"></select></div>
       </div>
-      <div class="field"><label for="eNote">Ghi chú (O)</label><textarea id="eNote"></textarea><div class="hint" id="eNoteHint">Gõ "hoàn" để đánh dấu đơn hoàn: hoa hồng về 0.</div></div>
+      <div class="field"><label for="eNote">Ghi chú (O)</label><textarea id="eNote"></textarea><div class="hint" id="eNoteHint">Gõ "bị hoàn" để đánh dấu đơn hoàn: hoa hồng về 0.</div></div>
       <div class="field"><label for="eMoneyNote">Diễn giải tiền (P)</label><textarea id="eMoneyNote"></textarea></div>
       <div class="row2" id="eCtvRow">
         <div class="field"><label for="eDiscount">% Chiết khấu (Q)</label><input type="number" id="eDiscount" min="0" max="100" step="any"><div class="hint">Gõ số % (VD 15) để tính hoa hồng riêng cho đơn này. Để trống: theo tỷ lệ của CTV.</div></div>
@@ -1102,6 +1112,19 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     <div class="dlg-foot">
       <button class="btn" type="button" id="supCopy">📋 Sao chép</button>
       <button class="btn ghost" type="button" id="supClose">Đóng</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2>Đơn đã xóa</h2>
+      <p class="count" id="delSub"></p>
+      <div id="delList"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" type="button" id="delClose">Đóng</button>
     </div>
   </form>
 </dialog>
@@ -1189,6 +1212,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
 
 <div id="print-area"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="undoBar" role="status"><span id="undoMsg"></span><button type="button" id="undoBtn">↩ Hoàn tác</button></div>
 <div id="postChip" role="status" aria-live="polite"></div>
 <div id="saveFail"></div>
 
@@ -2615,18 +2639,17 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       : 'Tự điền theo tiền hàng (nghìn đồng). Sửa được nếu có giảm giá hoặc phụ phí.';
     $('noteLabel').innerHTML = bu ? 'Lý do bù <span class="req">*</span>' : 'Ghi chú';
     $('fNote').placeholder = bu ? 'VD: Bù 1 hộp bị vỡ của đơn ngày 02/10, khách Nguyễn Thị Lan' : '';
-    $('noteHint').textContent = bu ? 'Không dùng chữ "hoàn" trong lý do bù (app sẽ hiểu là đơn hoàn). Ghi "bị trả về", "giao lỗi"...'
-      : isRetail() ? 'Ghi chú có từ "hoàn" sẽ được tính là đơn hoàn (không tính doanh thu).'
-      : 'Ghi chú có từ "hoàn" sẽ được tính là đơn hoàn (hoa hồng 0).';
+    $('noteHint').textContent = bu ? 'Không dùng cụm "bị hoàn" trong lý do bù (app sẽ hiểu là đơn hoàn). Ghi "bị trả về", "giao lỗi"...'
+      : isRetail() ? 'Ghi chú có cụm "bị hoàn" sẽ được tính là đơn hoàn (không tính doanh thu).'
+      : 'Ghi chú có cụm "bị hoàn" sẽ được tính là đơn hoàn (hoa hồng 0).';
     if (!S.editing) $('btnSubmit').textContent = bu ? 'Lưu đơn bù' : isRetail() ? 'Lưu đơn khách lẻ' : 'Lưu đơn hàng';
     if (bu) $('fAmount').value = 0;
     else if (!S.amountDirty) $('fAmount').value = S.itemsTotal || ($('fAmount').value === '0' ? '' : $('fAmount').value);
     updateShipWarn();
   }
   function noteHasReturn(t) {
-    let x = String(t || '').normalize('NFC').toLowerCase();
-    ['hoàn thành', 'hoàn tất'].forEach(w => { x = x.split(w).join(' '); });
-    return x.indexOf('hoàn') >= 0;
+    const x = String(t || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ');
+    return x.indexOf('bị hoàn') >= 0;
   }
   $('fKinds').addEventListener('change', () => { if (!isBu()) S.amountDirty = false; applyKind(); recalcItems(); });
   $('orderForm').addEventListener('reset', () => { addrMarkClear(); setTimeout(applyKind, 0); S.dup = null; renderDup(null); });
@@ -3003,7 +3026,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       [items.some(i => !(Number.isInteger(i.qty) && i.qty >= 1)), 'Số lượng phải là số nguyên từ 1 trở lên.'],
       [o.amount === '' || Number(o.amount) < 0, 'Số tiền thu phải là số không âm.'],
       [o.bu && !o.note.trim(), 'Đơn bù: ghi lý do bù vào ô Lý do bù.'],
-      [o.bu && noteHasReturn(o.note), 'Lý do đơn bù không dùng chữ "hoàn" (app sẽ hiểu là đơn hoàn). Thay bằng "bị trả về", "giao lỗi"...'],
+      [o.bu && noteHasReturn(o.note), 'Lý do đơn bù không dùng cụm "bị hoàn" (app sẽ hiểu là đơn hoàn). Thay bằng "bị trả về", "giao lỗi"...'],
       [!o.ship, 'Chọn loại phí ship.']
     ];
     const bad = checks.find(c => c[0]);
@@ -3328,6 +3351,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
             <span class="o-name">${esc(o.receiver)}</span>
             <span class="badge ${rt ? 'bad' : o.shipped ? 'ok' : o.preparing ? 'prep' : 'wait'}">${rt ? '⚠ ' : o.preparing ? '📦 ' : ''}${esc(o.status)}</span>
             ${o.bu ? '<span class="badge bu">🔁 Đơn bù</span>' : ''}
+            ${o.discPct ? '<span class="badge disc">🏷 Đã chiết khấu' + (o.discPct > 0 ? ' ' + esc(o.discPct) + '%' : '') + '</span>' : ''}
             ${o.pick ? '<span class="badge prep">✅ ĐI HÔM NAY</span>' : ''}
             ${le ? '<span class="badge le">🛍️ Khách lẻ</span>' : ''}
           </div>
@@ -3352,6 +3376,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
             <button type="button" class="link" data-print="${i}">In phiếu</button>
             ${!le || admin ? `<button type="button" class="link" data-dup="${i}">📋 Sao chép đơn</button>` : ''}
             ${editPart}
+            ${admin && o.shipped && !rt ? `<button type="button" class="link" data-reship="${i}">↩ Cho đi lại</button>` : ''}
             ${o.canDelete ? `<button type="button" class="link danger" data-del="${i}">🗑 Xóa đơn</button>` : ''}
           </div>
         </div>
@@ -3361,7 +3386,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         </div>` : `<div class="o-money">
           <div class="amt">Thu ${k(o.amount)}</div>
           <div class="com">${k(o.commission)}</div>
-          <div class="com-l">${rt ? 'đơn hoàn' : o.orderRate ? 'hoa hồng (tỷ lệ đơn ' + esc(o.orderRate) + '%)' : 'hoa hồng'}</div>
+          <div class="com-l">${rt ? 'đơn hoàn' : o.discPct ? 'đã chiết khấu: hoa hồng tính lại khi chốt' : o.orderRate ? 'hoa hồng (tỷ lệ đơn ' + esc(o.orderRate) + '%)' : 'hoa hồng'}</div>
         </div>`}
       </article>`;
     }).join('');
@@ -3445,6 +3470,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (dp) { copyOrder(S.orders[Number(dp.dataset.dup)]); return; }
     const dl = e.target.closest('[data-del]');
     if (dl) { deleteOrderUi(S.orders[Number(dl.dataset.del)], dl); return; }
+    const rs = e.target.closest('[data-reship]');
+    if (rs) { reshipUi(S.orders[Number(rs.dataset.reship)], rs); return; }
     const p = e.target.closest('[data-print]'), st = e.target.closest('[data-status]'), fm = e.target.closest('[data-form]');
     if (p) printOrder(S.orders[Number(p.dataset.print)]);
     if (st) openStatus(Number(st.dataset.status));
@@ -3872,12 +3899,83 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (!confirm('🗑 XÓA ĐƠN NÀY?\n\n' + info + '\n\nĐơn sẽ bị xóa khỏi danh sách (tồn kho được cộng trả lại). Bản sao được lưu ở sheet "Đơn đã xóa".')) return;
     btn.disabled = true; btn.textContent = 'Đang xóa…';
     try {
-      await api('deleteOrder', S.token, o.row, o.tsKey, o.src || 'ctv');
-      toast('Đã xóa đơn của ' + o.receiver + '.');
+      const res = await api('deleteOrder', S.token, o.row, o.tsKey, o.src || 'ctv');
       S.loaded.dash = false; S.loaded.cust = false;
       refreshStock(true);
       loadOrders();
+      if (res && res.delRow) showUndo('Đã xóa đơn của ' + o.receiver + '.', async () => { await undoDelete(res.delRow, res.tsKey, o.receiver); });
+      else toast('Đã xóa đơn của ' + o.receiver + '.');
     } catch (err) { fail(err); btn.disabled = false; btn.textContent = '🗑 Xóa đơn'; }
+  }
+
+  let undoTimer;
+  function showUndo(msg, fn) {
+    const b = $('undoBar');
+    $('undoMsg').textContent = msg;
+    b.className = 'show';
+    $('undoBtn').disabled = false;
+    $('undoBtn').onclick = async () => {
+      $('undoBtn').disabled = true;
+      try { await fn(); b.className = ''; } catch (err) { fail(err); $('undoBtn').disabled = false; }
+    };
+    clearTimeout(undoTimer); undoTimer = setTimeout(() => { b.className = ''; }, 15000);
+  }
+  async function undoDelete(delRow, tsKey, receiver) {
+    await apiLock('restoreDeletedOrder', S.token, delRow, tsKey);
+    toast('Đã khôi phục đơn của ' + receiver + '.');
+    S.loaded.dash = false; S.loaded.cust = false;
+    refreshStock(true);
+    loadOrders();
+  }
+  S.delItems = [];
+  async function openDeleted() {
+    $('delSub').textContent = '';
+    $('delList').innerHTML = '<p class="count">Đang tải…</p>';
+    $('delDlg').showModal();
+    try {
+      const list = await api('listDeletedOrders', S.token);
+      S.delItems = list || [];
+      $('delSub').textContent = isAdmin()
+        ? 'Các đơn đã xóa gần đây chưa khôi phục (tối đa 30 đơn mới nhất). Khôi phục xong đơn nằm ở cuối danh sách, giữ nguyên thời gian tạo.'
+        : 'Các đơn của bạn đã xóa trong 24 giờ qua. Quá 24 giờ, liên hệ Admin để khôi phục.';
+      renderDeleted();
+    } catch (err) { $('delList').innerHTML = ''; fail(err); }
+  }
+  function renderDeleted() {
+    $('delList').innerHTML = S.delItems.length ? S.delItems.map((d, i) => `<div class="del-item">
+      <div><b>${esc(d.receiver)}</b> · ${esc(d.phone)}${isAdmin() ? ' · ' + (d.src === 'le' ? 'Khách lẻ' : esc(d.code + ' ' + d.name)) : ''}</div>
+      <div class="o-prod">${esc(d.product)}</div>
+      <div class="count">Thu ${k(d.amount)} · tạo ${esc(d.ts)} · xóa ${esc(d.delAt)} bởi ${esc(d.by)}</div>
+      <button type="button" class="btn" data-restore="${i}">↩ Khôi phục đơn này</button></div>`).join('')
+      : '<p class="empty">Không có đơn nào để khôi phục.</p>';
+  }
+  $('btnDeleted').addEventListener('click', openDeleted);
+  $('delClose').addEventListener('click', () => $('delDlg').close());
+  $('delList').addEventListener('click', async e => {
+    const b = e.target.closest('[data-restore]');
+    if (!b) return;
+    const d = S.delItems[Number(b.dataset.restore)];
+    if (!d) return;
+    b.disabled = true; b.textContent = 'Đang khôi phục…';
+    try {
+      await apiLock('restoreDeletedOrder', S.token, d.delRow, d.tsKey);
+      S.delItems.splice(Number(b.dataset.restore), 1);
+      renderDeleted();
+      toast('Đã khôi phục đơn của ' + d.receiver + '.');
+      S.loaded.dash = false; S.loaded.cust = false;
+      refreshStock(true);
+      loadOrders();
+    } catch (err) { fail(err); b.disabled = false; b.textContent = '↩ Khôi phục đơn này'; }
+  });
+  async function reshipUi(o, btn) {
+    if (!o) return;
+    if (!confirm('CHO ĐƠN NÀY ĐI LẠI?\n\n' + o.receiver + ' · ' + o.phone + '\n\nApp sẽ bỏ tick Đã ship, xóa ngày ship / đơn vị VC / mã vận đơn cũ (mã cũ lưu trong Lịch sử sửa) và tick ĐI HÔM NAY trên DS xuất hàng.')) return;
+    btn.disabled = true; btn.textContent = 'Đang xử lý…';
+    try {
+      await apiLock('reshipOrder', S.token, o.row, o.tsKey, o.src || 'ctv');
+      toast('Đã đưa đơn của ' + o.receiver + ' vào danh sách đi lại.');
+      loadOrders();
+    } catch (err) { fail(err); btn.disabled = false; btn.textContent = '↩ Cho đi lại'; }
   }
 
   const EDIT_MAP = { amount: 'eAmount', ship: 'eShip', note: 'eNote', moneyNote: 'eMoneyNote',
@@ -3889,7 +3987,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('eTitle').textContent = o.receiver;
     $('eSub').textContent = o.ts + ' / ' + (le ? 'Đơn khách lẻ' : o.code + ' ' + o.name);
     $('eCtvRow').hidden = le;
-    $('eNoteHint').textContent = le ? 'Gõ "hoàn" để đánh dấu đơn hoàn: không tính doanh thu.' : 'Gõ "hoàn" để đánh dấu đơn hoàn: hoa hồng về 0.';
+    $('eNoteHint').textContent = le ? 'Gõ "bị hoàn" để đánh dấu đơn hoàn: không tính doanh thu.' : 'Gõ "bị hoàn" để đánh dấu đơn hoàn: hoa hồng về 0.';
     $('eShipFeeLabel').textContent = le ? 'Phí ship thực tế (S)' : 'Tiền ship CTV phải trả (S)';
     $('eShipFeeHint').textContent = le ? 'Nghìn đồng. Cột S của sheet Đơn khách lẻ.' : 'Nghìn đồng. Dùng tính bảng chốt hoa hồng mục (6).';
     Object.keys(EDIT_MAP).forEach(key => { $(EDIT_MAP[key]).value = o[key]; });
