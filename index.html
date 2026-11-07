@@ -245,6 +245,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .it-cell span { display: block; font-size: 14px; color: var(--muted); font-weight: 600; }
   .it-cell b { display: block; padding: 10px 0; font-weight: 700; font-size: 17px; }
   .it-sum { color: var(--green-dark); }
+  .it-pin { width: 100%; font-weight: 700; font-size: 17px; }
+  .it-pin.chg { border-color: var(--sun); background: var(--sun-soft); }
   .it-del { background: none; border: 0; color: var(--red); font-weight: 700; cursor: pointer; padding: 10px 4px; font-size: 16px; }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; border-top: 3px solid var(--green);
                margin-top: 12px; padding-top: 12px; font-weight: 800; font-size: 18px; }
@@ -2297,7 +2299,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       <div class="it-stock"></div>
       <div class="it-row">
         <label>Số lượng<input type="number" class="it-q" min="1" step="1" value="1" inputmode="numeric"></label>
-        <div class="it-cell"><span>Đơn giá</span><b class="it-price">—</b></div>
+        <div class="it-cell"><span>Đơn giá</span><b class="it-price">—</b><input type="number" class="it-pin" min="0" step="any" inputmode="decimal" hidden aria-label="Đơn giá (nghìn đồng), Admin sửa được"></div>
         <div class="it-cell"><span>Thành tiền</span><b class="it-sum">—</b></div>
         <button type="button" class="it-del" aria-label="Xóa dòng sản phẩm">Xóa</button>
       </div>`;
@@ -2541,6 +2543,23 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     }
     recalcItems();
   });
+  function linePrice(row, p) {
+    const pin = row.querySelector('.it-pin'), pb = row.querySelector('.it-price');
+    if (!p || !isAdmin()) { pin.hidden = true; pb.hidden = false; return p ? p.price : 0; }
+    const key = row.querySelector('.it-p').value;
+    if (row.dataset.pk !== key) { row.dataset.pk = key; pin.value = String(p.price); }
+    pin.hidden = false; pb.hidden = true;
+    const v = pin.value === '' ? NaN : Number(pin.value);
+    const ok = isFinite(v) && v >= 0;
+    pin.classList.toggle('chg', ok && v !== p.price);
+    return ok ? v : p.price;
+  }
+  function customPrice(row, p) {
+    if (!p || !isAdmin()) return undefined;
+    const pin = row.querySelector('.it-pin');
+    const v = pin.value === '' ? NaN : Number(pin.value);
+    return isFinite(v) && v >= 0 && v !== p.price ? v : undefined;
+  }
   function recalcItems() {
     scheduleDup();
     let total = 0, n = 0;
@@ -2570,8 +2589,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     rows.forEach(row => {
       const p = S.meta.products[row.querySelector('.it-p').value];
       const q = Math.max(0, Math.floor(Number(row.querySelector('.it-q').value) || 0));
-      const sum = p ? p.price * q : 0;
-      row.querySelector('.it-price').textContent = p ? kf(p.price) : '—';
+      const price = linePrice(row, p);
+      const sum = p ? price * q : 0;
+      row.querySelector('.it-price').textContent = p ? kf(price) : '—';
       row.querySelector('.it-sum').textContent = p ? kf(sum) : '—';
       if (p) { total += sum; n++; }
     });
@@ -2949,13 +2969,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const editing = S.editing;
     const roleEl = document.querySelector('input[name=role]:checked');
     const rows = Array.from(document.querySelectorAll('#items .item'));
-    const items = rows.map(r => ({ p: S.meta.products[r.querySelector('.it-p').value], qty: Number(r.querySelector('.it-q').value) }));
+    const items = rows.map(r => { const p = S.meta.products[r.querySelector('.it-p').value]; return { p: p, qty: Number(r.querySelector('.it-q').value), price: customPrice(r, p) }; });
     const retail = isRetail();
     const o = {
       retail: retail,
       code: retail ? '' : $('fCtv').value, role: retail ? S.meta.retailRole : (roleEl ? roleEl.value : ''),
       receiver: $('fReceiver').value, phone: normPhone($('fPhone').value), address: getAddress(),
-      items: items.filter(i => i.p).map(i => ({ name: i.p.name, qty: i.qty })),
+      items: items.filter(i => i.p).map(i => i.price === undefined ? { name: i.p.name, qty: i.qty } : { name: i.p.name, qty: i.qty, price: i.price }),
       amount: isBu() ? 0 : $('fAmount').value, ship: getShip(), note: $('fNote').value, bu: isBu()
     };
     const relaxAddr = isAdmin() && retail;
@@ -2983,7 +3003,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       [items.some(i => !(Number.isInteger(i.qty) && i.qty >= 1)), 'Số lượng phải là số nguyên từ 1 trở lên.'],
       [o.amount === '' || Number(o.amount) < 0, 'Số tiền thu phải là số không âm.'],
       [o.bu && !o.note.trim(), 'Đơn bù: ghi lý do bù vào ô Lý do bù.'],
-      [!editing && !!stockShort(items), stockShort(items) + ' Liên hệ Admin nhập kho.'],
       [o.bu && noteHasReturn(o.note), 'Lý do đơn bù không dùng chữ "hoàn" (app sẽ hiểu là đơn hoàn). Thay bằng "bị trả về", "giao lỗi"...'],
       [!o.ship, 'Chọn loại phí ship.']
     ];
@@ -3014,10 +3033,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         file = { name: f.name, mimeType: f.type, data: await readBase64(f) };
       }
       if (editing) {
-        await api('updateMyOrder', S.token, editing.row, editing.tsKey, o, file, editing.src || 'ctv');
+        const upd = await api('updateMyOrder', S.token, editing.row, editing.tsKey, o, file, editing.src || 'ctv');
         rememberCustomer(o.receiver.trim(), o.phone, o.address);
         busy(btn, false);
-        toast('Đã lưu thay đổi.');
+        toast(upd && upd.stockWarn ? 'Đã lưu thay đổi. ⚠ ' + upd.stockWarn : 'Đã lưu thay đổi.', !!(upd && upd.stockWarn));
         exitEdit();
         S.loaded.orders = false; S.loaded.dash = false;
         refreshStock(true);
@@ -3113,6 +3132,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     if (res && res.ms && isAdmin()) console.log('submitOrder ms', JSON.stringify(res.ms));
     const who = job.o.receiver.trim();
     if (warn) toast(warn, true);
+    else if (res && res.stockWarn) toast('Đã lưu đơn: ' + who + '. ⚠ ' + res.stockWarn, true);
     else toast((job.retail ? 'Đã lưu đơn khách lẻ: ' : 'Đã lưu đơn: ') + who + (job.file ? ' (kèm ảnh bill)' : '') +
       (res && res.ms && isAdmin() ? ' · máy chủ ' + (res.ms.tong / 1000).toFixed(1) + 's' + msTop(res.ms) : ''));
     if (!S.outbox.length) setTimeout(() => refreshStock(true), 600);
