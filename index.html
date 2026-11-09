@@ -1186,13 +1186,15 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <div class="field"><label for="iTol">Bỏ qua chênh lệch dưới (nghìn đồng)</label><input type="number" id="iTol" min="0" step="1" value="10"></div>
           <div class="field"><label for="iBig">Báo LỚN BẤT THƯỜNG từ (nghìn đồng)</label><input type="number" id="iBig" min="0" step="1" value="50"></div>
         </div>
-        <label class="mg-chk"><input type="checkbox" id="iCodShip"> Tiền thu hộ đã gồm cước khi người nhận trả cước</label>
-        <div class="hint">Lệch = số trong file hãng trừ Số tiền thu (K) của đơn. Đơn Ship 0đ hoặc đơn bù: kỳ vọng 0. Cột "thực tế" của VNPost chỉ có số khi đã giao: đơn chưa giao xong được so với cột "ban đầu". Không chọn cột Tiền thu hộ thì bỏ qua phần đối chiếu.</div>
+        <div class="field"><label for="iSub">Trợ giá ship cho khách (nghìn đồng): cộng lại khi so sánh, chỉ với đơn "Khách chịu phí ship"</label><input type="number" id="iSub" min="0" step="1" value="5"></div>
+        <label class="mg-chk"><input type="checkbox" id="iCodShip" checked> Đơn "Khách chịu phí ship": trừ cước trong file khỏi tiền thu hộ (vì tiền thu hộ đã gồm cước), rồi cộng trợ giá ship ở ô trên</label>
+        <label class="mg-chk"><input type="checkbox" id="iCodSheet" checked> Ghi kết quả đối chiếu vào 2 sheet đơn (cột AB → AH, ô cảnh báo tô đỏ) khi bấm Áp dụng</label>
+        <div class="hint">Lệch = (số trong file hãng − cước + trợ giá ship, chỉ với đơn Khách chịu phí ship) trừ Số tiền thu (K) của đơn. VD đơn 480k, cước 25k, khách trả 480 + 25 − 5 = 500k: 500 − 25 + 5 = 480k, lệch 0. Đơn Ship 0đ hoặc đơn bù: kỳ vọng 0. Cột "thực tế" của VNPost chỉ có số khi đã giao: đơn chưa giao xong được so với cột "ban đầu". Không chọn cột Tiền thu hộ thì bỏ qua phần đối chiếu.</div>
         <div class="row2">
           <div class="field"><label for="iUnit">Đơn vị tiền ở cột cước</label><select id="iUnit"><option value="dong">Đồng (22.000 = 22k)</option><option value="k">Nghìn đồng (22 = 22k)</option></select></div>
           <div class="field"><label for="iCarrier">Ghi Đơn vị VC</label><select id="iCarrier"></select></div>
         </div>
-        <label class="mg-chk"><input type="checkbox" id="iShip" checked> Tick Đã ship và ghi ngày hôm nay nếu đơn chưa ship</label>
+        <label class="mg-chk"><input type="checkbox" id="iShip" checked> Tick Đã ship nếu đơn chưa ship. Ngày ship (cột V) chỉ được điền khi ô đang TRỐNG, theo ngày trong file (không có ngày thì dùng hôm nay). Ô đã có ngày thì không bao giờ bị ghi đè.</label>
         <div class="hint" id="impSample"></div>
       </div>
       <div id="impRes"></div>
@@ -3762,7 +3764,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     impFill($('iStatus'), heads, pk.status); impFill($('iReason'), heads, pk.reason);
     impFill($('iDate'), heads, pk.date); impFill($('iCod'), heads, pk.cod);
     impFill($('iCod0'), heads, pk.cod0); impFill($('iPayer'), heads, pk.payer);
-    $('iCodShip').checked = pk.cod >= 0 && !impHas(impNorm(heads[pk.cod]), 'tien hang');
+    $('iCodShip').checked = true; $('iCodSheet').checked = true;
     let mx = 0;
     if (pk.fee >= 0) for (let i = IMP.head + 1; i < IMP.table.length; i++) { const n = impNum(IMP.table[i][pk.fee]); if (n != null && n > mx) mx = n; }
     $('iUnit').value = mx >= 1000 ? 'dong' : 'k';
@@ -3803,19 +3805,29 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const manual = res.hasCode.filter(x => !x.same), same = res.hasCode.filter(x => x.same);
     let html = `<div class="mg-box"><div class="mg-t">${done ? 'ĐÃ GHI ' + res.applied + ' ĐƠN' + (res.statusApplied ? ' · CẬP NHẬT TRẠNG THÁI ' + res.statusApplied + ' ĐƠN' : '') : 'KẾT QUẢ XEM TRƯỚC'}</div>` +
       `<div>${res.groups} khách trong file · khớp 1 đơn: <b>${res.matched.length}</b> · đơn đã có mã khác (nhập tay): <b>${manual.length}</b> · khớp nhiều đơn: <b>${res.multi.length}</b> · không thấy đơn: <b>${res.none.length}</b> · dòng bỏ qua: <b>${res.skippedRows.length}</b></div></div>`;
+    if (res.dateDiff && res.dateDiff.length) {
+      html += sec('NGÀY SHIP (CỘT V) KHÁC NGÀY TRONG FILE - CHỈ BÁO, KHÔNG TỰ SỬA', res.dateDiff, x => '<b>' + esc(x.receiver || '(không tên)') + '</b> · ' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ' · mã ' + esc(x.tracks.join(', ')) + '<br>' +
+        'Đơn nhập <b>' + esc(x.ts) + '</b> · ngày ship trên đơn: <b>' + esc(x.shipDate) + '</b> · ngày trong file: <b>' + esc(x.fileDate.split('-').reverse().join('/')) + '</b> (đơn ghi ' + (x.days > 0 ? 'MUỘN' : 'SỚM') + ' hơn file ' + Math.abs(x.days) + ' ngày)', true);
+      if (!done) html += '<div class="mg-box"><button class="btn ghost" type="button" data-imp="fixdate">Sửa ngày ship trên đơn về ngày trong file (' + res.dateDiff.length + ' đơn)</button><div id="impFixMsg" class="count">Chỉ sửa khi bạn bấm nút này, và chỉ các đơn trong danh sách trên.</div></div>';
+    }
     if (res.dateBad) html += `<p class="count imp-warn">${res.dateBad} dòng có ngày không đọc được (cần dạng ngày/tháng/năm đủ 4 chữ số, VD 23/10/2026 hoặc 2026-11-07): các dòng này khớp không theo ngày.</p>`;
     const cd = res.cod;
     if (cd && cd.on) {
       const sk = cd.skipped, sg = cd.sumDiff > 0 ? '+' : '';
       html += `<div class="mg-box"><div class="mg-t">ĐỐI CHIẾU TIỀN THU HỘ (file hãng trừ Số tiền thu của đơn)</div>` +
         `<div>Đã so <b>${cd.compared}</b> đơn · khớp: <b>${cd.same}</b> · lệch dưới ${kf(cd.tol)} (bỏ qua): <b>${cd.small}</b> · <span class="${cd.diffs.length ? 'imp-warn' : ''}">LỆCH từ ${kf(cd.tol)}: <b>${cd.diffs.length}</b>${cd.diffs.length ? ' · tổng lệch ' + sg + kf(cd.sumDiff) : ''}</span></div>` +
+        (cd.forgot ? `<div class="imp-warn">CÓ ${cd.forgot} ĐƠN NGHI QUÊN THU TIỀN HÀNG (có Số tiền thu nhưng hãng gần như không thu tiền hàng)</div>` : '') +
         (cd.big ? `<div class="imp-warn">CÓ ${cd.big} ĐƠN LỆCH LỚN BẤT THƯỜNG (từ ${kf(cd.bigTol)} trở lên)</div>` : '') +
+        (cd.shipSub ? `<div class="count">Đã trừ cước ở ${cd.shipSub} đơn "Khách chịu phí ship"${cd.subsidy > 0 ? ' và cộng trợ giá ' + kf(cd.subsidy) + ' cho mỗi đơn' : ''}.</div>` : '') +
+        (cd.writable ? (done ? (cd.written ? `<div><b>Đã ghi ${cd.written} đơn vào cột AB → AH</b> của 2 sheet đơn (Thu hộ trong file, Cước trừ, Thu hộ sau trừ cước, Lệch, Cảnh báo, Cơ sở, Ngày đối chiếu). Ô cảnh báo tô đỏ khi lệch từ ${kf(cd.bigTol)}.</div>` : '') : `<div class="count">Bấm "Áp dụng" sẽ ghi ${cd.writable} đơn vào cột AB → AH của 2 sheet đơn (nếu ô ghi kết quả được tick).</div>`) : '') +
+        (cd.writeErr ? `<div class="imp-warn">Không ghi được cột AB → AH: ${esc(cd.writeErr)}</div>` : '') +
         `<div class="count">Không so được: ${sk.pending} đơn chưa giao xong và không có cột "ban đầu" · ${sk.ret} đơn hãng báo hoàn · ${sk.partial} đơn thiếu mã trong file (đơn nhiều kiện) · ${sk.appRet} đơn đã ghi hoàn trên app.</div></div>`;
       const dl = x => '<b>' + esc(x.receiver || '(không tên)') + '</b> · ' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ' · mã ' + esc(x.tracks.join(', ')) + '<br>' +
-        'Đơn nhập <b>' + esc(x.ts) + '</b>' + (x.shipDate ? ' · ship ' + esc(x.shipDate) : '') + ' · file hãng: <b>' + kf(x.file) + '</b> (' + esc(x.basis) + ') · đơn: <b>' + kf(x.expect) + '</b>' + (x.ship0 ? ' (Ship 0đ)' : '') + (x.bu ? ' (đơn bù)' : '') +
+        'Đơn nhập <b>' + esc(x.ts) + '</b>' + (x.shipDate ? ' · ship ' + esc(x.shipDate) : '') + ' · file hãng: <b>' + kf(x.gross !== undefined ? x.gross : x.file) + '</b>' + (x.feeSub > 0 ? ' − cước ' + kf(x.feeSub) + (x.subsidy > 0 ? ' + trợ giá ' + kf(x.subsidy) : '') + ' = <b>' + kf(x.file) + '</b>' : '') + ' (' + esc(x.basis) + ') · đơn: <b>' + kf(x.expect) + '</b>' + (x.ship0 ? ' (Ship 0đ)' : '') + (x.bu ? ' (đơn bù)' : '') +
         ' · <span class="imp-warn">lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff) + '</span>';
+      html += sec('NGHI QUÊN THU TIỀN HÀNG (K > 0 nhưng hãng không thu tiền hàng)', cd.diffs.filter(x => x.forgot), dl, true);
       html += sec('LỆCH LỚN BẤT THƯỜNG TỪ ' + kf(cd.bigTol), cd.diffs.filter(x => x.big), dl, true);
-      html += sec('LỆCH TỪ ' + kf(cd.tol) + (cd.big ? ' ĐẾN DƯỚI ' + kf(cd.bigTol) : ''), cd.diffs.filter(x => !x.big), dl, true);
+      html += sec('LỆCH TỪ ' + kf(cd.tol) + (cd.big ? ' ĐẾN DƯỚI ' + kf(cd.bigTol) : ''), cd.diffs.filter(x => !x.big && !x.forgot), dl, true);
     }
     if (cd && cd.on && cd.diffs.length) html += '<div class="row2" style="margin:8px 0"><button class="btn ghost" type="button" data-imp="copy">Sao chép báo cáo nhanh</button><button class="btn" type="button" data-imp="sheet">Xuất báo cáo (Google Sheet)</button></div><div id="impRepMsg" class="count"></div>';
     if (res.feeKept && res.feeKept.length) html += sec('CƯỚC ĐÃ CÓ SỐ KHÁC - GIỮ NGUYÊN, KHÔNG GHI ĐÈ', res.feeKept, x => '<b>' + esc(x.receiver || '(không tên)') + '</b> · ' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ' · cước trong đơn ' + kf(x.old) + ' · cước trong file ' + kf(x.file), true);
@@ -3906,19 +3918,38 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       impSetupMap();
     } catch (err) { $('impMap').hidden = true; $('impPrev').disabled = true; $('impRes').innerHTML = ''; fail(err); }
   });
-  ['iName', 'iPhone', 'iCode', 'iAddr', 'iTrack', 'iFee', 'iStatus', 'iReason', 'iDate', 'iCod', 'iCod0', 'iPayer', 'iTol', 'iBig', 'iCodShip', 'iUnit', 'iCarrier', 'iShip'].forEach(id => $(id).addEventListener('change', () => { impReset(); impSample(); }));
+  ['iName', 'iPhone', 'iCode', 'iAddr', 'iTrack', 'iFee', 'iStatus', 'iReason', 'iDate', 'iCod', 'iCod0', 'iPayer', 'iTol', 'iBig', 'iCodShip', 'iCodSheet', 'iSub', 'iUnit', 'iCarrier', 'iShip'].forEach(id => $(id).addEventListener('change', () => { impReset(); impSample(); }));
   function impRepText() {
     const r = IMP.last, cd = r && r.cod;
     if (!cd) return '';
     const L = ['BÁO CÁO LỆCH TIỀN THU HỘ', 'File: ' + (IMP.fileName || '') + ' · đối chiếu ' + new Date().toLocaleDateString('vi-VN'),
       'Đã so ' + cd.compared + ' đơn · khớp ' + cd.same + ' · lệch dưới ' + kf(cd.tol) + ': ' + cd.small + ' · LỆCH từ ' + kf(cd.tol) + ': ' + cd.diffs.length + ' · tổng lệch ' + (cd.sumDiff > 0 ? '+' : '') + kf(cd.sumDiff)];
+    if (cd.forgot) L.push('CÓ ' + cd.forgot + ' ĐƠN NGHI QUÊN THU TIỀN HÀNG, ghi [QUÊN THU] ở đầu dòng');
     if (cd.big) L.push('CÓ ' + cd.big + ' ĐƠN LỆCH LỚN BẤT THƯỜNG (từ ' + kf(cd.bigTol) + ' trở lên), ghi [LỚN] ở đầu dòng');
-    cd.diffs.forEach((x, i) => L.push((i + 1) + '. ' + (x.big ? '[LỚN] ' : '') + 'Đơn nhập ' + x.ts + ' · ' + (x.receiver || '(không tên)') + ' (' + (x.src === 'le' ? 'Khách lẻ' : x.code) + ') · mã ' + x.tracks.join(', ') + ' · file ' + kf(x.file) + ' · đơn ' + kf(x.expect) + ' · lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff)));
+    cd.diffs.forEach((x, i) => L.push((i + 1) + '. ' + (x.forgot ? '[QUÊN THU] ' : (x.big ? '[LỚN] ' : '')) + 'Đơn nhập ' + x.ts + ' · ' + (x.receiver || '(không tên)') + ' (' + (x.src === 'le' ? 'Khách lẻ' : x.code) + ') · mã ' + x.tracks.join(', ') + ' · file ' + kf(x.gross !== undefined ? x.gross : x.file) + (x.feeSub > 0 ? ' − cước ' + kf(x.feeSub) + (x.subsidy > 0 ? ' + trợ giá ' + kf(x.subsidy) : '') + ' = ' + kf(x.file) : '') + ' · đơn ' + kf(x.expect) + ' · lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff)));
+    const dd = r.dateDiff || [];
+    if (dd.length) {
+      L.push('', 'NGÀY SHIP TRÊN ĐƠN KHÁC NGÀY TRONG FILE (' + dd.length + ' đơn):');
+      dd.forEach((x, i) => L.push((i + 1) + '. ' + (x.receiver || '(không tên)') + ' (' + (x.src === 'le' ? 'Khách lẻ' : x.code) + ') · mã ' + x.tracks.join(', ') + ' · đơn ghi ' + x.shipDate + ' · file ' + x.fileDate.split('-').reverse().join('/')));
+    }
     return L.join('\n');
   }
   $('impRes').addEventListener('click', async ev => {
     const b = ev.target.closest('[data-imp]');
-    if (!b || !IMP.last || !IMP.last.cod) return;
+    if (!b || !IMP.last) return;
+    if (b.dataset.imp === 'fixdate') {
+      const list = IMP.last.dateDiff || [], fm = $('impFixMsg');
+      if (!list.length) return;
+      if (!confirm('Sửa ngày ship (cột V) của ' + list.length + ' đơn trong danh sách về ngày trong file hãng? Chỉ sửa các đơn trong danh sách này.')) return;
+      busy(b, true, 'Đang sửa…');
+      try {
+        const out = await api('importFixShipDate', S.token, list.map(x => ({ src: x.src, row: x.row, recv: x.receiver, oldKey: x.shipKey, newKey: x.fileDate })));
+        fm.textContent = '✔ Đã sửa ngày ship của ' + out.fixed + ' đơn' + (out.skipped ? ' · bỏ qua ' + out.skipped + ' đơn (đã bị thay đổi hoặc không còn khớp)' : '') + '.';
+        b.disabled = true; loadOrders();
+      } catch (err) { fail(err); } finally { busy(b, false); }
+      return;
+    }
+    if (!IMP.last.cod) return;
     const msg = $('impRepMsg');
     if (b.dataset.imp === 'copy') {
       const txt = impRepText();
@@ -3933,7 +3964,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const cd = IMP.last.cod;
     busy(b, true, 'Đang xuất…');
     try {
-      const out = await api('importCodReport', S.token, { file: IMP.fileName || '', tol: cd.tol, compared: cd.compared, same: cd.same, small: cd.small, sumDiff: cd.sumDiff, bigTol: cd.bigTol, big: cd.big, diffs: cd.diffs });
+      const out = await api('importCodReport', S.token, { file: IMP.fileName || '', tol: cd.tol, compared: cd.compared, same: cd.same, small: cd.small, sumDiff: cd.sumDiff, bigTol: cd.bigTol, big: cd.big, forgot: cd.forgot, diffs: cd.diffs });
       msg.innerHTML = '✔ Đã xuất ' + out.count + ' đơn lệch: <a href="' + esc(out.url) + '" target="_blank" rel="noopener">Mở Google Sheet</a> · <a href="' + esc(out.xlsxUrl) + '" target="_blank" rel="noopener">Tải Excel</a>';
     } catch (err) { fail(err); } finally { busy(b, false); }
   });
@@ -3947,7 +3978,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const codActual = ci >= 0 && impHas(impNorm(IMP.labels[ci] || ''), 'thuc te');
     const tol = Number($('iTol').value);
     return api('importShip', S.token, rows, { apply: apply, carrier: $('iCarrier').value, markShipped: $('iShip').checked,
-      codOn: ci >= 0, codActual: codActual, codIncShip: $('iCodShip').checked, codTol: isNaN(tol) || $('iTol').value === '' ? 10 : tol,
+      codOn: ci >= 0, codActual: codActual, codIncShip: $('iCodShip').checked, codSheet: $('iCodSheet').checked, shipSubsidy: $('iSub').value === '' || isNaN(Number($('iSub').value)) ? 5 : Math.max(0, Number($('iSub').value)), codTol: isNaN(tol) || $('iTol').value === '' ? 10 : tol,
       codBig: isNaN(Number($('iBig').value)) || $('iBig').value === '' ? 50 : Number($('iBig').value) });
   }
   $('impPrev').addEventListener('click', async () => {
@@ -3958,11 +3989,11 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     try {
       const res = await p;
       impRender(res, false);
-      $('impGo').hidden = false; $('impGo').disabled = res.matched.length === 0 && !(res.updates || []).some(x => x.act !== 'skip');
+      $('impGo').hidden = false; $('impGo').disabled = res.matched.length === 0 && !(res.updates || []).some(x => x.act !== 'skip') && !(res.cod && res.cod.on && res.cod.writable && $('iCodSheet').checked);
     } catch (err) { fail(err); } finally { busy(btn, false); }
   });
   $('impGo').addEventListener('click', async () => {
-    if (!confirm('Ghi mã vận đơn, cước vào các đơn khớp và cập nhật trạng thái theo hãng (giao thành công → tick Đã ship; hoàn → ghi lý do vào Ghi chú)? Mã vận đơn đã có và cước đã có số khác sẽ không bị đổi.')) return;
+    if (!confirm('Ghi mã vận đơn, cước vào các đơn khớp và cập nhật trạng thái theo hãng (giao thành công → tick Đã ship; hoàn → ghi lý do vào Ghi chú)? Mã vận đơn đã có và cước đã có số khác sẽ không bị đổi. Nếu bật ô ghi kết quả đối chiếu, các cột AB → AH của 2 sheet đơn cũng được ghi (ghi đè kết quả đối chiếu cũ của các đơn có trong file).')) return;
     const p = impCall(true);
     if (!p) return;
     const btn = $('impGo');
@@ -3971,7 +4002,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       const res = await p;
       impRender(res, true);
       $('impGo').hidden = true;
-      toast('Đã ghi ' + res.applied + ' đơn' + (res.statusApplied ? ', cập nhật trạng thái ' + res.statusApplied + ' đơn.' : '.'));
+      toast('Đã ghi ' + res.applied + ' đơn' + (res.statusApplied ? ', cập nhật trạng thái ' + res.statusApplied + ' đơn' : '') + (res.cod && res.cod.written ? ', đối chiếu ' + res.cod.written + ' đơn vào cột AB → AH' : '') + '.');
       loadOrders();
     } catch (err) { fail(err); } finally { busy(btn, false); }
   });
