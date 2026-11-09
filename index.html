@@ -1183,7 +1183,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <div class="field"><label for="iPayer">Cột Người trả cước</label><select id="iPayer"></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="iTol">Bỏ qua chênh lệch dưới (nghìn đồng)</label><input type="number" id="iTol" min="0" step="1" value="10"></div>
+          <div class="field"><label for="iTol">Bỏ qua chênh lệch dưới (nghìn đồng)</label><input type="number" id="iTol" min="0" step="1" value="5"></div>
           <div class="field"><label for="iBig">Báo LỚN BẤT THƯỜNG từ (nghìn đồng)</label><input type="number" id="iBig" min="0" step="1" value="50"></div>
         </div>
         <div class="field"><label for="iSub">Trợ giá ship cho khách (nghìn đồng): cộng lại khi so sánh, chỉ với đơn "Khách chịu phí ship"</label><input type="number" id="iSub" min="0" step="1" value="5"></div>
@@ -3824,7 +3824,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
         `<div class="count">Không so được: ${sk.pending} đơn chưa giao xong và không có cột "ban đầu" · ${sk.ret} đơn hãng báo hoàn · ${sk.partial} đơn thiếu mã trong file (đơn nhiều kiện) · ${sk.appRet} đơn đã ghi hoàn trên app.</div></div>`;
       const dl = x => '<b>' + esc(x.receiver || '(không tên)') + '</b> · ' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ' · mã ' + esc(x.tracks.join(', ')) + '<br>' +
         'Đơn nhập <b>' + esc(x.ts) + '</b>' + (x.shipDate ? ' · ship ' + esc(x.shipDate) : '') + ' · file hãng: <b>' + kf(x.gross !== undefined ? x.gross : x.file) + '</b>' + (x.feeSub > 0 ? ' − cước ' + kf(x.feeSub) + (x.subsidy > 0 ? ' + trợ giá ' + kf(x.subsidy) : '') + ' = <b>' + kf(x.file) + '</b>' : '') + ' (' + esc(x.basis) + ') · đơn: <b>' + kf(x.expect) + '</b>' + (x.ship0 ? ' (Ship 0đ)' : '') + (x.bu ? ' (đơn bù)' : '') +
-        ' · <span class="imp-warn">lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff) + '</span>';
+        ' · <span class="imp-warn">lệch ' + (x.cust ? '(đơn − file, dương = hãng trả thiếu) ' : '') + (x.diff > 0 ? '+' : '') + kf(x.diff) + '</span>';
       html += sec('NGHI QUÊN THU TIỀN HÀNG (K > 0 nhưng hãng không thu tiền hàng)', cd.diffs.filter(x => x.forgot), dl, true);
       html += sec('LỆCH LỚN BẤT THƯỜNG TỪ ' + kf(cd.bigTol), cd.diffs.filter(x => x.big), dl, true);
       html += sec('LỆCH TỪ ' + kf(cd.tol) + (cd.big ? ' ĐẾN DƯỚI ' + kf(cd.bigTol) : ''), cd.diffs.filter(x => !x.big && !x.forgot), dl, true);
@@ -3926,7 +3926,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       'Đã so ' + cd.compared + ' đơn · khớp ' + cd.same + ' · lệch dưới ' + kf(cd.tol) + ': ' + cd.small + ' · LỆCH từ ' + kf(cd.tol) + ': ' + cd.diffs.length + ' · tổng lệch ' + (cd.sumDiff > 0 ? '+' : '') + kf(cd.sumDiff)];
     if (cd.forgot) L.push('CÓ ' + cd.forgot + ' ĐƠN NGHI QUÊN THU TIỀN HÀNG, ghi [QUÊN THU] ở đầu dòng');
     if (cd.big) L.push('CÓ ' + cd.big + ' ĐƠN LỆCH LỚN BẤT THƯỜNG (từ ' + kf(cd.bigTol) + ' trở lên), ghi [LỚN] ở đầu dòng');
-    cd.diffs.forEach((x, i) => L.push((i + 1) + '. ' + (x.forgot ? '[QUÊN THU] ' : (x.big ? '[LỚN] ' : '')) + 'Đơn nhập ' + x.ts + ' · ' + (x.receiver || '(không tên)') + ' (' + (x.src === 'le' ? 'Khách lẻ' : x.code) + ') · mã ' + x.tracks.join(', ') + ' · file ' + kf(x.gross !== undefined ? x.gross : x.file) + (x.feeSub > 0 ? ' − cước ' + kf(x.feeSub) + (x.subsidy > 0 ? ' + trợ giá ' + kf(x.subsidy) : '') + ' = ' + kf(x.file) : '') + ' · đơn ' + kf(x.expect) + ' · lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff)));
+    cd.diffs.forEach((x, i) => L.push((i + 1) + '. ' + (x.forgot ? '[QUÊN THU] ' : (x.big ? '[LỚN] ' : '')) + 'Đơn nhập ' + x.ts + ' · ' + (x.receiver || '(không tên)') + ' (' + (x.src === 'le' ? 'Khách lẻ' : x.code) + ') · mã ' + x.tracks.join(', ') + ' · file ' + kf(x.gross !== undefined ? x.gross : x.file) + (x.feeSub > 0 ? ' − cước ' + kf(x.feeSub) + (x.subsidy > 0 ? ' + trợ giá ' + kf(x.subsidy) : '') + ' = ' + kf(x.file) : '') + ' · đơn ' + kf(x.expect) + ' · lệch ' + (x.cust ? '(đơn − file, dương = hãng trả thiếu) ' : '') + (x.diff > 0 ? '+' : '') + kf(x.diff)));
     const dd = r.dateDiff || [];
     if (dd.length) {
       L.push('', 'NGÀY SHIP TRÊN ĐƠN KHÁC NGÀY TRONG FILE (' + dd.length + ' đơn):');
