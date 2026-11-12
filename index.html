@@ -385,7 +385,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
   .kpi.rev-le { border-left: 6px solid var(--sun); }
   .kpi.rev-le b { color: #8A5A00; }
   @media (max-width: 520px) { .kpis.rev2 { grid-template-columns: 1fr; } .rev-total b { font-size: 30px; } }
-  #orderForm.is-bu #fAmount { background: var(--mist); color: var(--muted); }
+  #orderForm.is-bu #fAmount, #orderForm.amt-locked #fAmount { background: var(--mist); color: var(--muted); }
   .order.returned { background: var(--red-soft); box-shadow: inset 5px 0 0 var(--red); }
   .order.returned .com { color: var(--red); }
   .stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
@@ -773,7 +773,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <div class="field">
             <label for="fAmount">Số tiền thu <span class="req">*</span></label>
             <input type="number" id="fAmount" min="0" step="any" inputmode="decimal">
-            <div class="hint" id="amountHint">Tự điền theo tiền hàng (nghìn đồng). Sửa được nếu có giảm giá hoặc phụ phí.</div>
+            <div class="hint" id="amountHint">Tự điền theo tiền hàng (nghìn đồng).</div>
           </div>
         </div>
         <div class="field ship-box">
@@ -833,6 +833,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       <div class="imp-box" id="impBox" hidden>
         <button type="button" class="btn" id="btnToday">📦 Đi hôm nay</button>
         <button type="button" class="btn ghost" id="btnImport">📥 Nhập vận đơn</button>
+        <button type="button" class="btn ghost" id="btnCod">💰 Đối chiếu bảng kê COD</button>
         <span id="impLibUrl" data-u="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" hidden></span>
       </div>
       <div class="imp-box" id="supBox" hidden>
@@ -947,7 +948,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
           <li><b>🎁 Combo / Deal</b>: chọn combo như sản phẩm thường. Khi lưu, đơn tự tách thành từng sản phẩm (VD 2 combo gồm 1 Cao bổ huyết + 1 Cao bổ phổi → 2 Cao bổ huyết, 2 Cao bổ phổi), tiền thu vẫn theo giá combo. Thẻ đơn có thêm khung <b>Đã nhập (combo, deal, lẻ)</b> cạnh <b>Tổng sản phẩm</b>: ghi đúng các dòng đã chọn khi nhập (combo/deal, sản phẩm lẻ, quà tặng) để đối chiếu, tránh nhầm với tổng sản phẩm đã tách.</li>
           <li><b>🎁 Quà tặng</b>: chọn combo/deal có kèm quà xong, ô <b>Quà tặng</b> hiện ngay dưới danh sách sản phẩm với các nút quà (VD <b>+ Túi lưới</b>). Bấm nút để thêm quà (giá 0k), mỗi lần bấm thêm 1. Đủ số quà thì nút tự khóa. Chọn quá số quà hoặc quà không thuộc combo thì app không cho lưu.</li>
           <li>Đơn có nhiều sản phẩm: bấm <b>+ Thêm sản phẩm</b>. App tự cộng ô <b>Tổng cộng</b>.</li>
-          <li>Ô <b>Số tiền thu</b> tự điền bằng tổng tiền hàng. Chỉ sửa khi có giảm giá hoặc phụ phí.</li>
+          <li>Ô <b>Số tiền thu</b> tự tính bằng tổng tiền hàng, CTV và Đại lý không sửa được. Cần giảm giá hoặc phụ phí: liên hệ Admin.</li>
           <li>Gửi bù hàng cho khách (hàng vỡ, thiếu, lỗi…): chọn <b>Loại đơn: Đơn bù (0đ)</b>, chọn sản phẩm như bình thường, ghi <b>lý do bù</b>. Tiền hàng tự = 0, không tính doanh số và hoa hồng. Lọc đơn bù ở tab Đơn hàng bằng mục <b>Đơn bù</b>.</li>
           <li>Chọn loại phí ship, đính kèm ảnh bill nếu khách đã chuyển khoản, rồi bấm <b>Lưu đơn hàng</b>.</li>
         </ol>
@@ -1203,6 +1204,27 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
       <button class="btn ghost" type="button" id="impClose">Đóng</button>
       <button class="btn" type="button" id="impPrev" disabled>Xem trước</button>
       <button class="btn" type="button" id="impGo" disabled hidden>Ghi vào đơn</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="codDlg">
+  <form method="dialog" onsubmit="return false;">
+    <div class="dlg-body">
+      <h2>Đối chiếu bảng kê trả tiền COD</h2>
+      <p class="count">Chọn file Excel (.xlsx) hoặc CSV là "Bảng kê chứng nhận trả tiền COD" của hãng (có thể nhiều bảng kê trong một file). App khớp Số hiệu bưu gửi với cột Mã vận đơn của đơn (cả đơn CTV và đơn khách lẻ), so Số tiền trả với Số tiền thu của đơn, so Ngày ký gửi với Ngày ship và lấy Ngày thu tiền. Bấm Xem trước để xem kết quả (chưa ghi gì). Bấm Ghi kết quả để tạo sheet "Đối chiếu COD" và ghi chú Ngày thu tiền vào ô Mã vận đơn của từng đơn. Không sửa dữ liệu đơn.</p>
+      <div class="field"><label for="codFile">File bảng kê</label><input type="file" id="codFile" accept=".xlsx,.xls,.csv,.txt,text/csv"></div>
+      <div class="row2">
+        <div class="field"><label for="codTol">Bỏ qua chênh lệch tới (nghìn đồng)</label><input type="number" id="codTol" min="0" step="1" value="5"></div>
+        <div class="field"><label for="codBig">Báo LỆCH LỚN từ (nghìn đồng)</label><input type="number" id="codBig" min="0" step="1" value="50"></div>
+      </div>
+      <div class="hint">Lệch = Số tiền hãng trả trừ Số tiền thu của đơn (âm = hãng trả thiếu). Đơn Khách chịu phí ship: trừ cước và cộng trợ giá ship như khi nhập vận đơn. Đơn Ship 0đ hoặc đơn bù: kỳ vọng 0. Số tiền trong bảng kê tính bằng đồng, app tự đổi sang nghìn đồng.</div>
+      <div id="codRes"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" type="button" id="codClose">Đóng</button>
+      <button class="btn" type="button" id="codPrev" disabled>Xem trước</button>
+      <button class="btn" type="button" id="codGo" disabled hidden>Ghi kết quả</button>
     </div>
   </form>
 </dialog>
@@ -2640,9 +2662,12 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('itemsTotalRow').hidden = rows.length < 2;
     $('itemsTotal').textContent = kf(total);
     if (isBu()) $('fAmount').value = 0;
+    else if (amtLocked()) $('fAmount').value = n ? (S.editing && S.editKeep !== undefined && S.editSig === itemsSig() ? S.editKeep : total) : '';
     else if (!S.amountDirty) $('fAmount').value = n ? total : '';
     updateShipWarn();
   }
+  function amtLocked() { return !isAdmin(); }
+  function itemsSig() { return Array.from(document.querySelectorAll('#items .item')).map(r => r.querySelector('.it-p').value + 'x' + r.querySelector('.it-q').value).join(','); }
   function isBu() { const el = document.querySelector('input[name=kind]:checked'); return !!(el && el.value === 'bu'); }
   function setKind(bu) { document.querySelectorAll('input[name=kind]').forEach(el => { el.checked = el.value === (bu ? 'bu' : 'normal'); }); applyKind(); }
   function applyKind() {
@@ -2650,9 +2675,11 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('orderForm').classList.toggle('is-bu', bu);
     syncRadios();
     $('buInfo').hidden = !bu;
-    $('fAmount').readOnly = bu;
+    $('fAmount').readOnly = bu || amtLocked();
+    $('orderForm').classList.toggle('amt-locked', amtLocked());
     $('amountHint').textContent = bu ? 'Đơn bù: tiền hàng luôn = 0, không sửa được.'
-      : 'Tự điền theo tiền hàng (nghìn đồng). Sửa được nếu có giảm giá hoặc phụ phí.';
+      : amtLocked() ? 'Tự tính theo sản phẩm đã chọn (nghìn đồng), không sửa được. Cần giảm giá hoặc phụ phí: liên hệ Admin.'
+      : 'Tự điền theo tiền hàng (nghìn đồng). Admin sửa được nếu có giảm giá hoặc phụ phí.';
     $('noteLabel').innerHTML = bu ? 'Lý do bù <span class="req">*</span>' : 'Ghi chú';
     $('fNote').placeholder = bu ? 'VD: Bù 1 hộp bị vỡ của đơn ngày 02/10, khách Nguyễn Thị Lan' : '';
     $('noteHint').textContent = bu ? 'Không dùng cụm "bị hoàn" trong lý do bù (app sẽ hiểu là đơn hoàn). Ghi "bị trả về", "giao lỗi"...'
@@ -2707,6 +2734,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     const missed = fillItemsFrom(o.product, o.entries);
     $('fAmount').value = o.amount;
     S.amountDirty = num(o.amount) !== S.itemsTotal;
+    S.editKeep = num(o.amount); S.editSig = itemsSig();
     setKind(!!o.bu);
     if (missed) toast('Có ' + missed + ' dòng sản phẩm cũ không khớp danh mục. Chọn lại sản phẩm trước khi lưu.', true);
     $('billHint').textContent = 'Để trống nếu giữ ảnh bill cũ. Chọn file mới để thay ảnh.';
@@ -2800,7 +2828,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     setAddress(o.address);
     setShip(o.ship);
     const missed = fillItemsFrom(o.product, o.entries);
-    if (!o.bu && num(o.amount) !== null) {
+    if (!o.bu && num(o.amount) !== null && !amtLocked()) {
       $('fAmount').value = o.amount;
       S.amountDirty = num(o.amount) !== S.itemsTotal;
     }
@@ -3907,6 +3935,104 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxBEFxmyiwDQ2cLcCy_WMvimR
     $('impDlg').showModal();
   });
   $('impClose').addEventListener('click', () => $('impDlg').close());
+  const COD = { rows: null, name: '', ok: false };
+  const COD_ORDER = ['ĐƠN HOÀN NHƯNG CÓ TRẢ TIỀN', 'LỆCH LỚN', 'LỆCH', 'KHÔNG THẤY MÃ TRÊN APP', 'THIẾU MÃ (CHƯA ĐỦ)', 'LỆCH NGÀY', 'KHỚP'];
+  const COD_BG = { 'ĐƠN HOÀN NHƯNG CÓ TRẢ TIỀN': '#b71c1c', 'LỆCH LỚN': '#ef9a9a', 'LỆCH': '#ffcdd2', 'KHÔNG THẤY MÃ TRÊN APP': '#ffcc80', 'THIẾU MÃ (CHƯA ĐỦ)': '#cfd8dc', 'LỆCH NGÀY': '#fff59d', 'KHỚP': '#c8e6c9' };
+  function codChip(st, n) {
+    const c = COD_BG[st] || '#eeeeee';
+    return '<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:10px;font-weight:700;background:' + c + ';color:' + (st === COD_ORDER[0] ? '#ffffff' : '#222222') + '">' + esc(st) + (n === undefined ? '' : ': ' + n) + '</span>';
+  }
+  async function codRead(file) {
+    if (file.size > 8 * 1048576) throw new Error('File quá lớn (tối đa 8 MB).');
+    const buf = await file.arrayBuffer();
+    let table = [];
+    if (/\.(csv|txt)$/i.test(file.name)) {
+      let t = new TextDecoder('utf-8').decode(buf);
+      if (t.indexOf('\uFFFD') >= 0) { try { t = new TextDecoder('windows-1258').decode(buf); } catch (e) { t = t; } }
+      table = parseCsv(t.replace(/^\uFEFF/, ''));
+    } else {
+      await impLoadXlsx();
+      const wb = window.XLSX.read(buf, { type: 'array' });
+      wb.SheetNames.forEach(nm => { table = table.concat(window.XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, raw: true, defval: '' })); });
+    }
+    const out = [];
+    table.forEach(r => {
+      const row = (r || []).slice(0, 40).map(c => typeof c === 'number' ? c : String(c == null ? '' : c).replace(/\s+/g, ' ').trim().slice(0, 120));
+      if (row.some(c => c !== '')) out.push(row);
+    });
+    return out;
+  }
+  function codReset() { COD.ok = false; $('codGo').hidden = true; $('codGo').disabled = true; }
+  function codRender(res) {
+    const c = res.counts || {}, st = res.stats || {}, p = res.parse || {};
+    let html = '<div class="mg-box"><div class="mg-t">' + (res.applied ? 'ĐÃ GHI KẾT QUẢ' : 'KẾT QUẢ XEM TRƯỚC') + '</div>' +
+      '<div>Đọc <b>' + p.lines + '</b> dòng bảng kê (' + p.heads + ' bảng, tiền tính bằng ' + (p.unit === 'dong' ? 'đồng, đã đổi sang nghìn đồng' : 'nghìn đồng') + ')' +
+      (p.dupSkipped ? ' · bỏ ' + p.dupSkipped + ' dòng trùng hệt' : '') + (p.skipped ? ' · bỏ ' + p.skipped + ' dòng không đọc được số tiền' : '') + '</div><div style="margin:6px 0">' +
+      COD_ORDER.filter(k => c[k]).map(k => codChip(k, c[k])).join('') + '</div>' +
+      '<div class="count">Tiền hãng trả (không tính đơn thiếu mã): <b>' + kf(st.paidTotal) + '</b> · kỳ vọng theo đơn: <b>' + kf(st.expTotal) + '</b> · chênh: <b>' + kf(Math.round((st.paidTotal - st.expTotal) * 1000) / 1000) + '</b></div>';
+    if (res.applied) html += '<div>Đã ghi sheet "Đối chiếu COD"' + (res.sheetUrl ? ': <a href="' + esc(res.sheetUrl) + '" target="_blank" rel="noopener">Mở sheet</a>' : '') + ' · đã ghi chú ngày thu tiền vào ô Mã vận đơn của <b>' + res.noted + '</b> đơn.</div>';
+    html += '</div>';
+    const line = x => {
+      const who = x.src ? '<b>' + esc(x.recv || '(không tên)') + '</b> (' + (x.src === 'le' ? 'Khách lẻ' : esc(x.code)) + ', dòng ' + esc(x.row) + ')' : '<b>' + esc(x.payer || '(không tên)') + '</b> (chỉ có trong bảng kê)';
+      const d = x.diff === null ? '' : ' · <span class="' + (Math.abs(x.diff) > res.tol ? 'imp-warn' : '') + '">lệch ' + (x.diff > 0 ? '+' : '') + kf(x.diff) + '</span>';
+      return who + ' · mã ' + esc(x.tracks.join(', ')) + '<br>' + (x.src ? 'Đơn thu ' + kf(x.k) + ' · kỳ vọng ' + kf(x.exp) + ' · ' : '') + 'hãng trả <b>' + kf(x.paid) + '</b>' + d +
+        '<br>Ký gửi ' + esc(x.fileShip || '—') + (x.src ? ' (đơn ship ' + esc(x.shipDate || '—') + ')' : '') + ' · ngày thu tiền <b>' + esc(x.payDate || '—') + '</b>' + (x.note ? '<br><i>' + esc(x.note) + '</i>' : '');
+    };
+    COD_ORDER.forEach(k => {
+      const list = (res.rows || []).filter(x => x.status === k);
+      if (!list.length) return;
+      const lim = k === 'KHỚP' ? list.slice(0, 20) : list;
+      html += '<div class="mg-box"><div class="mg-t' + (k === 'KHỚP' ? '' : ' imp-warn') + '">' + esc(k) + ' (' + (c[k] || list.length) + ')</div>' + lim.map(x => '<div class="imp-line">' + line(x) + '</div>').join('') +
+        (lim.length < (c[k] || list.length) ? '<div class="count">Chỉ hiện ' + lim.length + ' dòng đầu. Xem đủ ở sheet "Đối chiếu COD" sau khi bấm Ghi kết quả.</div>' : '') + '</div>';
+    });
+    if (res.total > (res.rows || []).length) html += '<p class="count">Có ' + res.total + ' dòng kết quả, chỉ hiện ' + res.rows.length + ' dòng nặng nhất. Xem đủ ở sheet "Đối chiếu COD".</p>';
+    $('codRes').innerHTML = html;
+  }
+  $('btnCod').addEventListener('click', () => {
+    $('codFile').value = ''; COD.rows = null; $('codPrev').disabled = true; $('codRes').innerHTML = ''; codReset();
+    $('codDlg').showModal();
+  });
+  $('codClose').addEventListener('click', () => $('codDlg').close());
+  $('codFile').addEventListener('change', async () => {
+    const f = $('codFile').files[0];
+    codReset();
+    if (!f) return;
+    try {
+      $('codRes').innerHTML = '<p class="count">Đang đọc file…</p>';
+      COD.name = f.name;
+      COD.rows = await codRead(f);
+      if (COD.rows.length < 2) throw new Error('File không có dữ liệu.');
+      $('codRes').innerHTML = '<p class="count">Đã đọc ' + COD.rows.length + ' dòng của file ' + esc(f.name) + '. Bấm Xem trước.</p>';
+      $('codPrev').disabled = false;
+    } catch (err) { COD.rows = null; $('codPrev').disabled = true; $('codRes').innerHTML = ''; fail(err); }
+  });
+  ['codTol', 'codBig'].forEach(id => $(id).addEventListener('input', codReset));
+  function codOpts(apply) {
+    const t = Number($('codTol').value), b = Number($('codBig').value);
+    return { apply: apply, file: COD.name, tol: $('codTol').value === '' || isNaN(t) ? 5 : Math.max(0, t), big: $('codBig').value === '' || isNaN(b) ? 50 : Math.max(0, b) };
+  }
+  $('codPrev').addEventListener('click', async () => {
+    if (!COD.rows) return;
+    const btn = $('codPrev');
+    busy(btn, true, 'Đang đối chiếu…');
+    try {
+      const res = await api('codStmtImport', S.token, COD.rows, codOpts(false));
+      codRender(res);
+      COD.ok = true; $('codGo').hidden = false; $('codGo').disabled = false;
+    } catch (err) { codReset(); fail(err); } finally { busy(btn, false); }
+  });
+  $('codGo').addEventListener('click', async () => {
+    if (!COD.rows || !COD.ok) return;
+    if (!confirm('Ghi kết quả vào sheet "Đối chiếu COD" (làm lại từ đầu) và thêm ghi chú Ngày thu tiền vào ô Mã vận đơn của các đơn đã khớp? Dữ liệu đơn không bị sửa.')) return;
+    const btn = $('codGo');
+    busy(btn, true, 'Đang ghi…');
+    try {
+      const res = await api('codStmtImport', S.token, COD.rows, codOpts(true));
+      codRender(res);
+      toast('Đã ghi sheet Đối chiếu COD và ghi chú ngày thu tiền cho ' + res.noted + ' đơn.');
+      $('codGo').disabled = true;
+    } catch (err) { fail(err); } finally { busy(btn, false); }
+  });
   $('impFile').addEventListener('change', async () => {
     const f = $('impFile').files[0];
     if (!f) return;
